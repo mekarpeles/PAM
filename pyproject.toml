@@ -15,5 +15,8 @@ dependencies = []
 [project.scripts]
 pam = "pam.cli:main"
 
-[tool.setuptools]
-packages = ["pam", "pam.forge", "pam.state"]
+[tool.setuptools.packages.find]
+include = ["pam*"]
+
+[tool.setuptools.package-data]
+"pam.agents.ada" = ["*.md", "*.yml"]

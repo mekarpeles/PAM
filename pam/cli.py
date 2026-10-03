@@ -234,8 +234,9 @@ def cmd_agent_state(args):
 
 def cmd_agent_ledger(args):
     db.init()
+    from .agents.ada import ledger as L
+    from .agents.ada import where_are_we as W
     from .forge import ForgeError, get_forge
-    from .state import ledger as L
     agent = db.get_agent(args.name)
     if not agent:
         _die(f"no such agent: {args.name}")
@@ -250,20 +251,23 @@ def cmd_agent_ledger(args):
             comments = forge.pr_comments(w["repo_url"], w["sub_ref"])
         except ForgeError as e:
             _die(f"forge error: {e}")
-        head = (pr.get("head_sha") or "")
-        text = L.extract_ledger(comments)
+        head = pr.get("head_sha") or ""
+        text = "\n".join((c.get("body") or "") for c in comments)
+        entries = L.parse(text)
         print(f"{agent['name']}  {w['repo_name']}#{w['sub_ref']}  (head {head[:7] or '?'})")
-        if not text:
-            print("  (no ledger comment found)")
+        if not entries:
+            print("  (no ledger found)")
             continue
-        s = L.summarize(text, head)
-        c = s["counts"]
-        print(f"  DONE {c['done']}  STALE {c['stale']}  ASSERTED {c['asserted']}  OPEN {c['open']}"
-              + ("  — clean as of HEAD" if s["clean"] else ""))
+        b = W.classify(entries, head)
+        n = {k: len(v) for k, v in b.items()}
+        owed = n["asserted"] + n["stale"] + n["open"]
+        clean = " (clean as of HEAD)" if owed == 0 and n["done"] else ""
+        print(f"  DONE {n['done']}  STALE {n['stale']}  ASSERTED {n['asserted']}  "
+              f"OPEN {n['open']}{clean}")
         for name in ("stale", "asserted", "open"):
-            for e in s["buckets"][name]:
+            for e in b[name]:
                 sha = f"@{e.sha[:7]}" if e.sha else ""
-                print(f"    [{name}] [{e.status}{sha}] {e.desc}")
+                print(f"    [{name}] [{e.status}{sha}] {e.description}")
 
 
 def cmd_project_state(args):

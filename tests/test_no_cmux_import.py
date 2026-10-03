@@ -17,6 +17,8 @@ def test_importing_pam_pulls_in_no_cmux():
     import pam.gitutil  # noqa: F401
     import pam.forge  # noqa: F401
     import pam.state  # noqa: F401
+    import pam.runtime  # noqa: F401
+    import pam.agents.ada  # noqa: F401
 
     offenders = [m for m in sys.modules if m == "cmux" or m.startswith("cmux_lib")]
     assert not offenders, f"pam imported cmux modules: {offenders}"

@@ -1,71 +1,67 @@
-"""PAM-internal ledger renderer — pure parse/classify/summarize (no network)."""
-from pam.state import ledger as L
+"""ADA's ledger engine (adopted proven version) — parse, classify, escalation validation."""
+from pam.agents.ada import ledger as L
+from pam.agents.ada import where_are_we as W
+
+M = L.MARKER
 
 
-def test_parse_variants():
-    text = """
-    noise line, ignored
+def test_parse_uses_last_block_only():
+    text = f"""
+    stray chatter, not a ledger
+    {M}
+    - [open] from an older ledger block
+    <!-- some other comment -->
+    {M}
     - [tested@a1b2c3d4] empty feed renders | tests/test_feed.py::test_empty | alice
     - [open] handle pagination
-    - [accepted] design approved
-    not a bullet
     """
     entries = L.parse(text)
-    assert [e.status for e in entries] == ["tested", "open", "accepted"]
+    assert [e.status for e in entries] == ["tested", "open"]   # only the last block
     assert entries[0].sha == "a1b2c3d4"
     assert entries[0].evidence == "tests/test_feed.py::test_empty"
     assert entries[0].owner == "alice"
-    assert entries[1].sha is None and entries[1].evidence is None
+
+
+def test_no_marker_is_empty():
+    assert L.parse("there is no ledger here") == []
 
 
 def test_stale_against_prefix():
-    assert L.stale_against("a1b2c3d", "a1b2c3d4e5") is False   # prefix match
-    assert L.stale_against("a1b2c3d", "ffffffff") is True
-    assert L.stale_against(None, "abc") is False               # a requirement is never stale
-    assert L.stale_against("abc", None) is False
+    e = L.Entry(status="tested", description="x", evidence="ev", owner="", line_no=1, sha="a1b2c3d")
+    assert e.stale_against("a1b2c3d4e5") is False
+    assert e.stale_against("ffffffff") is True
+    req = L.Entry(status="open", description="x", evidence="", owner="", line_no=1, sha="")
+    assert req.stale_against("abc") is False   # no sha, a requirement is never stale
 
 
-def test_bucket_each_case():
+def test_classify_four_buckets():
     head = "a1b2c3d4"
-    # terminal + evidence + sha == head -> done
-    assert L.bucket(L.Entry("tested", "a1b2c3d4", "x", "ev", None), head) == "done"
-    # terminal + evidence + no sha -> done (nothing says it's stale)
-    assert L.bucket(L.Entry("tested", None, "x", "ev", None), head) == "done"
-    # terminal + evidence + stale sha -> stale
-    assert L.bucket(L.Entry("tested", "deadbee", "x", "ev", None), head) == "stale"
-    # terminal + NO evidence -> asserted
-    assert L.bucket(L.Entry("tested", "a1b2c3d4", "x", None, None), head) == "asserted"
-    # non-terminal -> open
-    assert L.bucket(L.Entry("open", None, "x", None, None), head) == "open"
+    entries = L.parse(f"""{M}
+    - [tested@a1b2c3d4] a | ev
+    - [tested@deadbee] b | ev
+    - [accepted] c
+    - [open] d
+    """)
+    b = W.classify(entries, head)
+    assert [e.description for e in b["done"]] == ["a"]
+    assert [e.description for e in b["stale"]] == ["b"]        # evidence, but non-HEAD sha
+    assert [e.description for e in b["asserted"]] == ["c"]     # terminal, no evidence
+    assert [e.description for e in b["open"]] == ["d"]
 
 
-def test_summarize_counts_and_clean():
-    head = "a1b2c3d4"
-    text = "\n".join([
-        "- [tested@a1b2c3d4] a | ev",       # done
-        "- [tested@deadbee] b | ev",        # stale
-        "- [accepted] c",                   # asserted (terminal, no evidence)
-        "- [open] d",                       # open
-    ])
-    s = L.summarize(text, head)
-    assert s["counts"] == {"done": 1, "stale": 1, "asserted": 1, "open": 1}
-    assert s["owed"] == 3
-    assert s["clean"] is False
+def test_escalation_validation():
+    bad = L.parse(f"{M}\n- [escalated] need a human call |")
+    assert bad[0].escalation_problem                           # missing kind/searched
+    ok = L.parse(f"{M}\n- [escalated] harden now? | kind:decision searched:issues,docs | mek")
+    assert ok[0].escalation_problem == ""
+    unfinished = L.parse(f"{M}\n- [escalated] x | kind:unfinished searched:docs")
+    assert "not an escalation" in unfinished[0].escalation_problem
 
 
-def test_summarize_clean():
-    head = "a1b2c3d4"
-    s = L.summarize("- [tested@a1b2c3d4] a | ev", head)
-    assert s["clean"] is True and s["owed"] == 0
-
-
-def test_extract_ledger_picks_last_marked_comment():
-    comments = [
-        {"body": "just a comment"},
-        {"body": L.DEFAULT_MARKER + "\n- [open] old"},
-        {"body": L.DEFAULT_MARKER + "\n- [tested@abc1234] new | ev"},
-        {"body": "trailing chatter"},
-    ]
-    text = L.extract_ledger(comments)
-    assert "new" in text and "old" not in text
-    assert L.extract_ledger([{"body": "no marker"}]) == ""
+def test_undischarged():
+    entries = L.parse(f"""{M}
+    - [tested] a | ev
+    - [tested] b
+    - [open] c
+    """)
+    assert [e.description for e in L.undischarged(entries)] == ["b", "c"]

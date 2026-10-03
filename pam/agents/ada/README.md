@@ -14,10 +14,13 @@ Program that binds its placeholders, so it ships with PAM rather than as a separ
   need the multiplexer, which PAM supplies and a Program composes in by id. It carries no
   project-specific checks.
 
-## Where the rest lives
+## The engine
 
-- The Oracle engine and the "where are we" / ledger renderer live in `pam/state/`. The ledger buckets
-  (done as of a sha, stale, asserted, open) are non-monotonic by design.
+- `ledger.py` and `where_are_we.py` are ADA's self-assessment engine, adopted from the proven
+  ada-framework versions that this manual references. `where_are_we.py` reports a position as done
+  as of a sha, stale, asserted, or open, and is non-monotonic by design (a rebase un-does `tested`).
+  `ledger.py` also validates escalations (an `escalated` entry must name its kind and what it
+  searched). `pam agent ledger` renders the same buckets for an operator.
 - A Program's own Oracle checks (for example how to run that project's app) live in the Program's
   `.pam/`, not here. Generic ADA stays project agnostic.
 
