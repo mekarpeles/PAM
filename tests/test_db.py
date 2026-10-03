@@ -51,6 +51,16 @@ def test_name_reuse_never_merges_histories(pam_db):
     assert old["last_session_id"] == "old-session"
 
 
+def test_launch_spec_roundtrip(pam_db):
+    spec = {"model": "claude-opus-4-8", "mcp_config": "~/.pam/mcp.json",
+            "permission_mode": "acceptEdits", "add_dir": ["/a", "/b"]}
+    a = pam_db.add_agent("pr-9-x", last_session_id="s1", launch_spec=spec)
+    import json
+    got = json.loads(pam_db.get_agent(a["id"])["launch_spec"])
+    assert got["model"] == "claude-opus-4-8"
+    assert got["add_dir"] == ["/a", "/b"]
+
+
 def test_ulid_sortable_and_unique(pam_db):
     from pam.ids import ulid
     ids = [ulid() for _ in range(100)]

@@ -156,6 +156,41 @@ emits the facts and config they consume.
    PAM rows; assign existing agents to the OL Program with roles/parentage; attrition for dirs.
 5. **Dashboard (later unit):** Monitor + Project-Manage views over the registry (generalizes AdaDash).
 
+## Direction check (external research, 2026-10-02)
+
+Validated against Anthropic's guidance, the orchestration-framework landscape, and emerging agent
+standards (A2A, AGNTCY/OASF, MCP). Verdict: the core bet is sound and fills a real gap — **no
+surveyed tool offers a standalone durable fleet registry over tmux-persistent long-lived agents**
+(closest: claude-swarm, Tmux-Orchestrator, Claude Squad — none with a registry DB).
+
+**Keep (validated):** thin SQLite registry with tmux kept separate (`pip install pam`, no tmux);
+ULID surrogate id + reusable name (textbook surrogate/natural key); "first-failing-guard,
+non-monotonic" state computed from external signals (matches CI/state-machine/agent-runtime
+practice); Oracle = Stop-hook verification (Claude Code even ships an `agent`-type Stop hook);
+authored-vs-recorded config split (mirrors Claude Code's own `.claude/` vs `~/.claude/`).
+
+**Reconsidered (applied):**
+- **Hierarchy is organizational, not a runtime delegation path.** Deep (3+) hierarchies are a
+  documented anti-pattern ("deep hierarchy drift": info loss at each delegation boundary; two-level
+  supervisor→worker is the sweet spot until a span exceeds ~7). PAM's `reports_to` edge is an
+  **org-chart/reporting label**; PAM does **not** build multi-hop real-time agent-to-agent
+  delegation (Anthropic: LLMs are poor at it). Runtime delegation stays ≤2 levels.
+- **Resume facts must be the full launch spec, not just id+cwd.** `claude --resume` does not restore
+  `--model/--mcp-config/--settings/--add-dir/--agent` unless re-passed; cross-project resume-by-id
+  (CC ≥2.1.223) makes cwd a disambiguator, not strictly required. Added `agents.launch_spec` (JSON).
+  **Never parse `~/.claude/projects/*.jsonl`** (internal format); use `--output-format json`/hooks.
+
+**Adopt (tracked as issues):** expose the registry over **MCP** so a live agent can ask "who's my
+lead / what's my assignment / my role" the Anthropic-native way (#18); align the agent schema with
+**A2A Agent Card / AGNTCY OASF** fields for future interop (#19); borrow proven mechanics from
+claude-swarm (per-agent role/dir context, session restore) and Tmux-Orchestrator (self-scheduling,
+inter-agent messaging — our claudio layer) rather than reinventing. A durable-execution engine
+(Temporal) is a *future* option only if crash-exact multi-step orchestration is ever needed — not now.
+
+**Scope note:** the full programs/roles/teams/projects model is more than a minimal v1, but it is
+justified by a concrete near-term use (building the real OL team), not speculation — which is the bar
+Anthropic sets ("add complexity only when it demonstrably improves outcomes").
+
 ## Acceptance tests
 
 - **Clean-slate OL team:** build the real OL Program (leads, epics, ADA agents) from empty `~/.pam`

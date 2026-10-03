@@ -52,6 +52,10 @@ CREATE TABLE IF NOT EXISTS agents (
     no_inject       INTEGER NOT NULL DEFAULT 0,
     unblock         INTEGER NOT NULL DEFAULT 0,
     allowed_tools   TEXT,
+    launch_spec     TEXT,                 -- JSON: full relaunch spec (model, mcp-config, settings,
+                                          --   add-dir, permission-mode, agent, …). `claude --resume`
+                                          --   does NOT restore these unless re-passed; id+cwd alone
+                                          --   brings an agent back subtly different.
     status          TEXT NOT NULL DEFAULT 'active',
     created_at      TEXT NOT NULL,
     retired_at      TEXT
@@ -160,11 +164,19 @@ def connect() -> sqlite3.Connection:
     return conn
 
 
+def _migrate(conn) -> None:
+    """Additive, never-reorder column migrations for existing DBs (the cmux agents.db pattern)."""
+    cols = {r["name"] for r in conn.execute("PRAGMA table_info(agents)").fetchall()}
+    if "launch_spec" not in cols:
+        conn.execute("ALTER TABLE agents ADD COLUMN launch_spec TEXT")
+
+
 def init() -> None:
-    """Create the schema (idempotent) and seed the built-in roles."""
+    """Create the schema (idempotent), migrate, and seed the built-in roles."""
     conn = connect()
     try:
         conn.executescript(SCHEMA)
+        _migrate(conn)
         for key, title, desc, perms, cfg in SEED_ROLES:
             if not conn.execute(
                 "SELECT 1 FROM roles WHERE program_id='' AND key=?", (key,)
@@ -277,7 +289,8 @@ def list_roles(program_id=None) -> list[dict]:
 # ---- agents -----------------------------------------------------------------
 
 def add_agent(name, cwd=None, last_session_id=None, identity_path=None,
-              home_path=None, no_inject=0, unblock=0, allowed_tools=None) -> dict:
+              home_path=None, no_inject=0, unblock=0, allowed_tools=None,
+              launch_spec=None) -> dict:
     conn = connect()
     try:
         if conn.execute(
@@ -287,12 +300,14 @@ def add_agent(name, cwd=None, last_session_id=None, identity_path=None,
         aid = ulid()
         if home_path is None:
             home_path = str(config.agents_dir() / aid)
+        if launch_spec is not None and not isinstance(launch_spec, str):
+            launch_spec = json.dumps(launch_spec)
         conn.execute(
             "INSERT INTO agents(id,name,cwd,last_session_id,identity_path,home_path,"
-            "no_inject,unblock,allowed_tools,status,created_at)"
-            " VALUES(?,?,?,?,?,?,?,?,?, 'active', ?)",
+            "no_inject,unblock,allowed_tools,launch_spec,status,created_at)"
+            " VALUES(?,?,?,?,?,?,?,?,?,?, 'active', ?)",
             (aid, name, cwd, last_session_id, identity_path, home_path,
-             int(no_inject), int(unblock), allowed_tools, _now()),
+             int(no_inject), int(unblock), allowed_tools, launch_spec, _now()),
         )
         conn.commit()
         return _row(conn.execute("SELECT * FROM agents WHERE id=?", (aid,)).fetchone())

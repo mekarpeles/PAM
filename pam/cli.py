@@ -123,9 +123,19 @@ def cmd_agent_onboard(args):
         if not rm:
             _die(f"--reports-to: '{args.reports_to}' is not a member of program '{p['name']}'")
         reports_to_id = rm["id"]
+    # Full relaunch spec: `claude --resume` does NOT restore these unless re-passed.
+    spec = {k: v for k, v in {
+        "model": args.model,
+        "mcp_config": args.mcp_config,
+        "settings": args.settings,
+        "add_dir": args.add_dir or None,
+        "permission_mode": args.permission_mode,
+        "agent": args.agent_type,
+    }.items() if v}
     try:
         agent = db.add_agent(name=args.name, cwd=args.cwd,
-                             last_session_id=args.session_id, identity_path=args.identity)
+                             last_session_id=args.session_id, identity_path=args.identity,
+                             launch_spec=spec or None)
     except db.ActiveNameExists:
         _die(f"an active agent named '{args.name}' already exists; "
              f"retire it first (pam agent retire {args.name}) before reusing the name")
@@ -162,7 +172,7 @@ def cmd_agent_show(args):
     if not a:
         _die(f"no such agent: {args.name}")
     for k in ("id", "name", "status", "cwd", "last_session_id", "identity_path",
-              "home_path", "created_at", "retired_at"):
+              "home_path", "launch_spec", "created_at", "retired_at"):
         print(f"  {k:16} {a[k]}")
 
 
@@ -410,6 +420,14 @@ def build_parser() -> argparse.ArgumentParser:
     ao.add_argument("--cwd", default=None)
     ao.add_argument("--identity", default=None)
     ao.add_argument("--reports-to", default=None, dest="reports_to")
+    # full relaunch spec (recorded so a resumed agent comes back identical)
+    ao.add_argument("--model", default=None)
+    ao.add_argument("--mcp-config", default=None, dest="mcp_config")
+    ao.add_argument("--settings", default=None)
+    ao.add_argument("--add-dir", action="append", default=None, dest="add_dir")
+    ao.add_argument("--permission-mode", default=None, dest="permission_mode")
+    ao.add_argument("--agent-type", default=None, dest="agent_type",
+                    help="the --agent flag Claude was launched with")
     ao.set_defaults(func=cmd_agent_onboard)
     al = agent.add_parser("ls"); al.add_argument("--all", action="store_true")
     al.set_defaults(func=cmd_agent_ls)
