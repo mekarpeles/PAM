@@ -1,124 +1,120 @@
 # PAM — Project Agentic Management
 
-**PAM is a general-purpose system for running a fleet of long-lived AI agents against real projects.**
+**PAM is one tool for running AI agents against real projects.** It gives you ADA, an atomic
+development agent that takes a single unit of work from an issue to a pull request and then stops, and
+for teams it adds the coordination and runtime around a fleet of them.
 
-You configure a **Program** — your project, your team, your tools — and PAM keeps those agents fed
-from the events that matter (a new issue, a PR, a review request, a scheduled check) and keeps track
-of who they are and what they're doing. Open Library is one Program; Lenny, Petabox, or PAM itself
-are others. Nothing here is Open-Library-specific — OL is an instance.
+You run `pam init` in a repo the way you run `git init`, and that repo becomes agent-workable. Open
+Library is one such project. Lenny, Petabox, or PAM itself are others. Nothing here is
+Open-Library-specific.
+
+## One tool
+
+There is one command surface, `pam`. Installing it sets up the system; there is no separate system
+init. ADA ships inside it (`pam/agents/ada/`) because ADA only means something once a project binds
+its placeholders, so it is part of PAM rather than a separate install. A developer who only wants the
+atomic agent uses the ADA parts. A team running a fleet uses the rest.
+
+## Where things live (the git model)
+
+PAM splits state the way git does, and for the same reason.
+
+- **`.pam/` in the project repo** holds the Program's authored config: the schema, the repo, the
+  inferred issue tracker, the ADA setup, roles, labels. It is committed and shared, like `.git/config`
+  plus tracked files. Clone the repo, run `pam init` (or it is already there and `pam` just loads it),
+  and you have the Program. There is no separate bundle repo to publish or install.
+- **`~/.pam/`** holds your per-developer recorded state: your agent home directories, their sessions,
+  and the Store (SQLite). It is per machine and never shared, like `~/.gitconfig`. `cq` and the
+  identity files live here too, in each agent's home.
+
+So the authored half travels in the repo, and the recorded half stays on your machine. A teammate who
+clones the repo gets the setup, not your running agents.
 
 ## The three layers
 
-1. **Store** (local, SQLite in `~/.pam/`) — identity & policy, your machine's recorded state.
-   **Programs** own repos (code plus a
-   shared **Knowledge Base**); **agents** are first-class and Program-independent and **join**
-   Programs via a **membership** that carries a **role** and a reporting line; **roles** are a
-   seedable catalog (`program_lead` / `division_lead` / `ada_agent` built in, plus your own);
-   **projects** are the units of work (projected onto a forge epic in GitHub-backed Programs), worked
-   in isolated **worktrees**.
-   Every agent has a stable **ULID id** and a reusable display **name** — reusing a name can never
-   merge two agents' histories.
+1. **Store** (`~/.pam/`, SQLite) — the recorded state: which Programs you have, your agents,
+   memberships, projects, phase. Agents are first-class and Program-independent; they join a Program
+   through a membership that carries a role and a reporting line. Every agent has a stable ULID id and
+   a reusable display name, and reusing a name can never merge two agents' histories.
+2. **Runtime + Actions** (PAM's execution layer) — the reason PAM exists. The Runtime watches your
+   issue and PR environment and turns changes into action. Actions are its plugins, modeled on GitHub
+   Actions: a trigger (an event or a schedule) plus a handler (deliver to an existing agent, spawn,
+   run a skill, run a script). It delivers to agents that already exist rather than starting a fresh
+   container each time.
+3. **Program config** in the repo's `.pam/` — the authored setup: roles, skills, the Oracle checks for
+   this project, actions, the label to state map. Text, version-controlled, reviewed through the same
+   PRs as the code.
 
-2. **Runtime + Actions** (PAM's execution layer) — the reason PAM exists. The **Runtime** polls your
-   Issue/PR environment for changes and turns them into action; **actions** are the plugins it
-   triggers, modeled on GitHub Actions/workflows: each is a **trigger** (`on:` an event, or a
-   schedule) + a **handler** (deliver-to-an-existing-agent, spawn, run-a-skill, run-a-script). It
-   **delivers events to agents that already exist** rather than starting a fresh container each time.
+## ADA, the atomic unit
 
-3. **Config bundle** (shareable, in git) — a Program's authored setup: roles, **skills**, oracle
-   configs, **actions**, onboarding recipes. It lives as **text** in a `pam-{program}` repo (e.g.
-   `pam-openlibrary`), version-controlled and PR-able. **Publish** it, **register** it into the
-   central Registry (a PR to the official PAM repo), and others **pull/install** it by name.
+ADA is the broadly useful piece, because every development project needs an agent that can take one
+unit of work to a quality PR and then stop, while only some projects need a management layer on top.
 
-## The parts of PAM (names)
+ADA lives in `pam/agents/ada/` and is project agnostic: every project name in its manual is a
+placeholder a Program binds. Its contract, taken from the versions that already work in practice:
 
-Clear names for the pieces, so we all mean the same thing:
+- Own one issue end to end. Post a ledger of what must become true, in the issue's own terms. Develop
+  in a worktree with red-first tests. Open a draft PR early. Verify in the real environment and sort
+  every claim into what you ran and what you read. Get an adversarial review from a subagent before
+  marking ready. Never merge.
+- The Oracle is a subconscious, not a supervisor. It surfaces at most one thing when you are about to
+  stop and have missed something, and silence from it is not approval.
+- Stop only when finished or genuinely blocked. Finished means you closed your own ledger and the only
+  thing left is a human merge. Blocked means a decision, authorization, or access you searched for
+  first and could not resolve. Everything else is still work, so keep going.
 
-| Part | What it is |
-|---|---|
-| **Store** | Your machine's local SQLite recorded state — installed Programs, agents, memberships, projects, phase. (Earlier drafts called this the local "registry".) |
-| **Registry** | The central, public index of published Programs, in the **official PAM repo**. You **register** a Program by opening a PR that adds it — git-native, like dockerhub/pypi. |
-| **Runtime** | PAM's execution layer: watch event sources → decide → dispatch to durable agents. **Actions** are its plugins. |
-| **Program** | A configured instance (OL, Lenny, PAM-itself). Bundles repos, a Knowledge Base, an Oracle definition, Roles, Skills, Actions, config. Shareable as `pam-{program}`. |
-| **Oracle** | The verification layer. A Program's **Oracle definition** (ordered guard states) is how PAM determines an agent's state for a Project. External, pinned — not vendored. |
-| **Knowledge Base (KB)** | A Program-level shared knowledge repo (e.g. `ol-kb`). Authored/shared, part of the Program. |
-| **Skills** | Reusable agent capabilities packaged with a Program — **distinct from Actions**: a Skill is a capability an agent *uses*; an Action is a trigger that *invokes* work. |
-| **Actions** | The Runtime's plugins: a **trigger** (event or schedule) + a **handler** (deliver / spawn / run-skill / run-script). |
-| **Agent** | A first-class, Program-independent teammate (stable ULID + reusable name). |
-| **Role** | A definition in a seedable catalog (`program_lead`/`division_lead`/`ada_agent` + your own); carries permissions. |
-| **Membership** | Joins an agent to a Program with a Role + a reporting line. **Distinct from Role**: the Role is the definition, the Membership is the binding. |
-| **Project** | A unit of work — projected onto a **forge epic** in GitHub-backed Programs — worked in an isolated **worktree**. |
+That last point is the whole defense against the two failure modes that matter: idling for days
+waiting on a human, and being poked by a cron to do low-value work when nothing is left.
 
-This is the next generation of **ADA (Atomic Agent)** — see https://mek.fyi/papers/ada. The ADA
-philosophies carry over (atomic agents, the shared Knowledge Base, worktrees, actions); PAM pulls
-`cq`, identity/lifecycle, and the action system *into* PAM, reduces cmux to a session/workspace
-multiplexer, and uses Claude's native SendMessage for agent messaging.
+## Why not GitHub Actions
 
-## Why not GitHub Actions (the founding constraint)
+The obvious home for "watch the forge, react" is a workflow runner. It does not work here, for two
+structural reasons. A stock ephemeral runner cannot keep an agent alive: a run gets a container, does
+a thing, and is destroyed, while an ADA agent must survive from the moment a PR opens until it merges,
+holding a worktree and accumulated context. And some work cannot run in that model at all, like a
+scheduled check against infrastructure with no runners or a secrets-bound host. So the event source is
+remote and the execution must be local and durable. The honest version of the claim is "why not an
+*ephemeral* runner"; a self-hosted runner or a durable-execution service solves part of it, and PAM's
+Runtime is the local, durable bridge for the rest.
 
-The obvious home for "watch GitHub, react to a push" is GitHub Actions. **It does not work here, for
-two independent, structural reasons:**
+## cmux and the invariant
 
-- **An Action cannot keep an agent alive.** A workflow run is ephemeral; it gets a container, does a
-  thing, and is destroyed. An ADA agent is the opposite — expensive to set up, holding a worktree, a
-  stack, and accumulated context, and it must survive **from the moment a PR opens until it merges.**
-  The most an Action carries across runs is a session id, a pointer to an environment it cannot keep.
-- **Some work cannot run in an Action at all** — a scheduled check against infrastructure with no
-  runners, a secrets-bound host, a private config repo.
+cmux integrates with PAM, not the other way around. Its remaining value is workspaces and keeping
+agents alive; native SendMessage handles agent-to-agent messaging. PAM never imports cmux, so
+`pip install pam` works on a machine with no tmux. The Runtime's decision core is tmux-free and runs
+dry-run by default; real dispatch goes through the cmux seam. A test keeps the no-import rule green.
 
-So the event source is remote and the execution must be **local and durable**. PAM's Runtime is the
-bridge: it polls or subscribes, decides what is actionable, and **messages an agent that already
-exists** (or spawns/schedules) rather than starting one. Where an Action works, use an Action.
+## Conventions
 
-## Programs are shareable — the `pam-{program}` model
+- Docs align first, then code follows to match, and the two land in the same PR. A docs change never
+  merges ahead of the code that makes it true. When code and docs disagree, that is a defect to fix.
+  See [docs/conventions.md](docs/conventions.md).
+- No em-dashes or other AI-slop constructs in anything we write.
 
-You should be able to hand your whole setup to someone else so they don't have to build a team from
-scratch. PAM makes a Program's **config** serializable to a git repo (like `pam-openlibrary`) — the
-dockerhub/pypi model for agent teams:
+## Getting started (what works today)
 
-- **Shared** (text, in the repo): roles + Division-Lead templates, skills, oracle configs, actions,
-  recipes, the label→state map, and the **pinned** versions of PAM/ADA/Oracle it builds on.
-- **Never shared** (local, in SQLite): which agents exist, their sessions, who claimed which issue —
-  the recorded state, which is useless (worse, misleading) to a teammate whose work hasn't started.
-
-Clone a Program → `pam program install` → bind your local values (your checkout paths, your bot
-account) → staff it with **your** agents. SQLite stays a local PAM concern and is **regenerated** on
-install; a `.db` is never checked into git. Teammates (and their agents) open PRs against the Program
-repo to improve the shared setup.
-
-## Fold-in vs depend-on
-
-The rule for what lives where: **a tool that is useful on its own stays its own repo and PAM depends
-on it, pinned; a tool that only makes sense inside PAM folds in.** So **Oracle** (a general
-verification runner) stays external and pinned; **ADA** folds in as a built-in agent-type + a
-PAM-internal progress renderer + an onboarding recipe. Generic assets ship with PAM/ADA; a Program's
-bundle holds only its **specific** skills/configs/actions + overrides — it never re-vendors the
-generic stuff.
-
-## The invariant that keeps the layers apart
-
-**`pip install pam && pam program add …` works on a machine with no tmux.** PAM never imports cmux;
-cmux uses PAM. The Runtime's decision core is tmux-free and can run in **dry-run** (decide, don't
-dispatch); actual delivery goes through the cmux/claudio seam. A test keeps this green.
-
-## Getting started
-
-- **[docs/quickstart.md](docs/quickstart.md)** — set up a team from scratch (copy-paste runnable).
-- **[docs/plan.md](docs/plan.md)** — the build plan, data model, and external direction-check.
-- **[docs/registry-design.md](docs/registry-design.md)** — the registry schema & boundary design.
-- Backlog: the [issues](https://github.com/mekarpeles/PAM/issues) (epic #5 and siblings).
+The target entry point is `pam init` in a repo. It is the next thing being built. What runs today:
 
 ```bash
 pip install -e .
 pam program add OpenLibrary --repo internetarchive/openlibrary --path ~/Projects/openlibrary --framework ada
-pam program init OpenLibrary
+pam program init OpenLibrary      # scaffolds the authored config
 pam agent onboard ada --program OpenLibrary --role program_lead
-pam status
+pam agent ls ; pam status
 ```
+
+More in [docs/quickstart.md](docs/quickstart.md) and [docs/plan.md](docs/plan.md). Backlog and design
+history are the [issues](https://github.com/mekarpeles/PAM/issues).
 
 ## Status
 
-Early but runnable. **Shipped:** the Store + CLI (Programs, repos, agents, memberships, roles,
-projects; origin-verified binding; full relaunch spec). **In progress:** Program publish/install
-(`pam-{program}`), the Runtime + actions, and the forge adapter + computed agent/project
-state. Assembled from a working implementation in reviewable units, not written fresh.
+**Shipped:** the Store and CLI (programs, repos, agents, memberships, roles, projects; origin-verified
+binding; full relaunch spec), the forge adapter, computed agent and project state plus the ledger
+renderer, and the Runtime decision core (action manifest loader, dedup/cooldown, dispatch interface,
+dry-run). ADA folded into `pam/agents/ada/`.
+
+**Next:** `pam init` and the `.pam/`-in-repo config model; curating the ADA process, skills, and
+doctrine into a short set (not the old monolith); the Runtime poll loop and, gated, live dispatch.
+
+**Deferred:** Program publish/install and a central Registry, both superseded by config-in-the-repo;
+the cmux integration; the community agent/skill marketplace (`pam registry`).

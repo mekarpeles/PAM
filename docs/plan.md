@@ -1,9 +1,23 @@
 # PAM — build plan (the general-purpose system)
 
-**Status:** the working plan, 2026-10-02. Supersedes the single-Program assumptions in
-[`registry-design.md`](registry-design.md); that doc's schema primitives (ULID stable id, WAL,
-authored-vs-recorded, the no-tmux invariant, the migration-by-attrition) still hold — this plan
-generalizes the entity model on top of them per Mek's Program direction.
+> **Reconciled 2026-10-03 (one-tool model). Read the [README](../README.md) first; it is canonical.**
+> The model consolidated to one tool, `pam`, with these changes to this plan:
+> - ADA dissolves into PAM at `pam/agents/ada/`. There is no separate ADA repo and no standalone-vs-fold-in question.
+> - A Program's authored config lives in the repo's `.pam/`, created by `pam init` (like `git init`).
+>   There is no `pam-{program}` bundle, no `pam program add`, and no publish/install.
+> - The central Registry becomes a deferred community marketplace, not part of the core.
+> - `~/.pam/` holds per-developer recorded state (agent homes, sessions, the Store); the repo's `.pam/`
+>   holds the shared authored config.
+> - cmux integrates with PAM, not the reverse, and is out of scope for now.
+>
+> What still holds below: the Store schema (programs, agents, memberships, roles, projects), the forge
+> adapter, the state and ledger renderers, the Runtime decision core, the ULID stable id, the
+> authored-vs-recorded split, and the no-tmux invariant. The superseded parts below (publish/install,
+> the `pam-{program}` bundle, the central Registry, ADA placement) are kept as design history.
+
+**Status:** the working plan, 2026-10-02, reconciled 2026-10-03. Builds on
+[`registry-design.md`](registry-design.md) schema primitives (ULID stable id, WAL,
+authored-vs-recorded, the no-tmux invariant).
 
 ## Context — what and why
 

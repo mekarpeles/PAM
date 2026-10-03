@@ -1,0 +1,177 @@
+# ADA's Oracle -- the checks true of ANY Issue to PR unit of work.
+#
+# This is not a pipeline and nothing walks it. ADA is in charge: it plans,
+# develops, tests and decides. The Oracle is a subconscious that catches the
+# moment the agent is about to stop and has not noticed what is left.
+#
+# So the engine's job is not next(state) -> state. It is:
+#
+#     select(world) -> ONE surfacing, or silence
+#
+# SILENCE IS THE COMMON OUTPUT AND THE SUCCESS CONDITION. A subconscious that
+# speaks at every stop is a nag, and a nag gets routed around exactly like a
+# control that is always broken. Most stops should produce nothing.
+#
+# WHY ONE AND NOT A LIST. The stop hook can force continuation roughly nine to
+# ten times before Claude Code stops the agent regardless -- measured twice, at
+# 10 and 9, not tunable. Every surfacing is subtracted from the agent's
+# remaining capacity at the moment it believed it was finished. A subconscious
+# that enumerates spends the budget proving work was done instead of doing it.
+#
+# NO `run:` ANYWHERE, inherited deliberately from the graph this came from. A
+# wrong `run:` acts, fails the check anyway, and hands over a prompt with
+# damage already done. Every decision here is one the agent should make
+# knowingly.
+#
+# ORDERING IS BY COST OF BEING WRONG, NOT BY PHASE. Phase fails because what
+# matters at the end of a debugging cycle differs from what matters before a
+# merge; cost-of-error does not, because it is a property of the surfacing
+# rather than of the moment. Four tiers:
+#
+#   1 irreversible loss        data, credentials, someone else's work
+#   2 a false thing believed   a claim the world does not support. These
+#                              propagate: unfinished work is visible and gets
+#                              finished, a wrong claim is invisible and gets
+#                              repeated.
+#   3 work to be redone        stale position: settled against a base that moved
+#   4 work not yet done        the ordinary unclosed gap
+#
+# Plus one promotion rule, which is mechanical rather than a judgement call:
+# a tier-4 surfacing becomes tier 2 WHEN THE LEDGER ASSERTS SOMETHING THE
+# WORLD DOES NOT SUPPORT. "Did I actually run this e2e" is ordinary unclosed
+# work until someone writes `tested`, and then it is a false thing believed.
+# The surfacing did not change; a claim came to rest on it.
+#
+# THE FLOOR: `overridable: false` cannot be relaxed by a project. Agents
+# overrule what is inconvenient as readily as what is wrong, and the asymmetry
+# is total -- being wrong about "something is at risk" costs a false alarm,
+# being wrong about "nothing is at risk" costs the work.
+
+version: 1
+
+context:
+  # No defaults for any of these. A framework that defaults BASE_REF to
+  # `master` is wrong on every repo that uses `main`, and wrong SILENTLY:
+  # branching off a base that does not exist fails in a way that looks like
+  # an empty diff.
+  #
+  # PROVENANCE:
+  #   Two repos in one org disagreed: openlibrary defaults to master and
+  #   openlibrary-i18n defaults to main. A branch taken from the wrong one
+  #   produced an empty diff and no error.
+  # /PROVENANCE
+  - REPO
+  - PR
+  - WORKTREE
+  - BASE        # the merge-base SHA this work was started from
+  - BASE_REF    # e.g. origin/main -- NO DEFAULT, fail loudly
+  - LEDGER      # path to the ledger text
+
+# A check that cannot run without the harness is a HARNESS check. ADA names
+# the dependency; it does not import or shell out to a multiplexer. PAM ships
+# those and a project composes them in by id.
+requires_optional:
+  - MUX
+
+checks:
+
+  # ---------------------------------------------------------------- tier 1
+  - id: work-exists-somewhere
+    tier: 1
+    overridable: false
+    network: false
+    check: >
+      test -z "$(git -C "$WORKTREE" status --porcelain)" &&
+      test "$(git -C "$WORKTREE" rev-list --count --all --not --remotes)" -eq 0
+    surface: |
+      You are about to stop, and this worktree holds work that exists nowhere
+      else -- uncommitted files, or commits on no remote. Removing this
+      directory destroys it. `--all`, not `--branches`: a stash and a
+      pre-rebase backup tag are the two things most likely to be the only
+      copy, and neither is on a branch.
+
+  - id: no-credential-in-diff
+    tier: 1
+    overridable: false
+    network: false
+    check: >
+      ! git -C "$WORKTREE" diff "$BASE"..HEAD |
+      grep -E '^\+' | grep -ivE '^\+\+\+' |
+      grep -iqE '(password|secret|token|api_key)\s*='
+    surface: |
+      The diff appears to add a credential. Remove it, and rotate it if it was
+      ever pushed -- a force-push removes it from the branch and not from
+      anyone who already fetched.
+
+  # ---------------------------------------------------------------- tier 2
+  - id: ledger-claims-are-backed
+    tier: 2
+    # Overridable, and that is a correction. The floor is for IRREVERSIBLE
+    # LOSS -- tier 1 -- and this is tier 2. Marked non-overridable it became
+    # a check a project with no ledger could neither satisfy nor compose out,
+    # which is how "not applicable" turns into a permanent refusal.
+    overridable: true
+    network: false
+    # The promotion rule in mechanical form. A terminal status with no
+    # evidence is the ledger asserting what the world does not support.
+    check: python3 where_are_we.py --ledger "$LEDGER" --repo "$WORKTREE" --only asserted
+    surface: |
+      The ledger marks something terminal with nothing behind it. You cannot
+      discharge an obligation by typing the word `tested`. This outranks
+      unfinished work on purpose: unfinished work is visible and gets
+      finished, a claim with nothing behind it is invisible and gets repeated.
+
+  # ---------------------------------------------------------------- tier 3
+  - id: position-is-current
+    tier: 3
+    overridable: true
+    network: false
+    # `mergeable` from an API means "no conflict with base", NOT "current". A
+    # branch can report mergeable and be built on a base from last week.
+    check: >
+      test -n "$BASE_REF" &&
+      test "$(git -C "$WORKTREE" rev-list --count HEAD.."$BASE_REF")" -lt 25
+    surface: |
+      This branch is well behind its base, or BASE_REF is unset. Everything
+      downstream -- CI, review, the diff a secrets check measures -- is
+      against a base that has moved. A finding made against a different commit
+      is not wrong, it is unverified.
+
+  # ---------------------------------------------------------------- tier 4
+  - id: ledger-has-no-open-gaps
+    tier: 4
+    overridable: true
+    network: false
+    check: python3 where_are_we.py --ledger "$LEDGER" --repo "$WORKTREE" --only open
+    surface: |
+      The ledger still names gaps nobody has closed. Each is something you
+      said must become true, or be consciously accepted.
+
+  # ------------------------------------------------- network, OFF by default
+  # A hook fires far more often than a cron, and crons were paused across this
+  # fleet for token burn. A check that costs an API call per agent per stop is
+  # opt-in, and a project composes it by id.
+  - id: pr-still-open
+    tier: 2
+    overridable: true
+    network: true
+    check: test "$(gh pr view "$PR" --repo "$REPO" --json state -q .state)" = "OPEN"
+    surface: |
+      PR #$PR is no longer open. Commits pushed to a merged or closed PR are
+      silently orphaned and never reach the base branch. If there is more
+      work, it needs a fresh PR.
+
+  - id: ci-green
+    tier: 3
+    overridable: true
+    network: true
+    check: gh pr checks "$PR" --repo "$REPO" --json state --jq 'all(.state=="SUCCESS")' | grep -q true
+    # Pending is not failure. Without this an agent that has just pushed is
+    # told to fix the cause of a check that has not finished -- sent to hunt a
+    # failure that does not exist. Unreadable is not unsatisfied.
+    pending_when: >
+      gh pr checks "$PR" --repo "$REPO" --json state --jq
+      'any(.state | test("PENDING|QUEUED|IN_PROGRESS|WAITING|REQUESTED"))' | grep -q true
+    surface: |
+      CI is not green on PR #$PR. CI attests that the code runs, which is
+      necessary and nowhere near sufficient.
