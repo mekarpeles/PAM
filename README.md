@@ -9,11 +9,13 @@ are others. Nothing here is Open-Library-specific — OL is an instance.
 
 ## The three layers
 
-1. **Registry** (local, SQLite in `~/.pam/`) — identity & policy. **Programs** own repos (code plus a
+1. **Store** (local, SQLite in `~/.pam/`) — identity & policy, your machine's recorded state.
+   **Programs** own repos (code plus a
    shared **Knowledge Base**); **agents** are first-class and Program-independent and **join**
    Programs via a **membership** that carries a **role** and a reporting line; **roles** are a
    seedable catalog (`program_lead` / `division_lead` / `ada_agent` built in, plus your own);
-   **projects** are the units of work (a project = a forge epic), worked in isolated **worktrees**.
+   **projects** are the units of work (projected onto a forge epic in GitHub-backed Programs), worked
+   in isolated **worktrees**.
    Every agent has a stable **ULID id** and a reusable display **name** — reusing a name can never
    merge two agents' histories.
 
@@ -23,9 +25,10 @@ are others. Nothing here is Open-Library-specific — OL is an instance.
    schedule) + a **handler** (deliver-to-an-existing-agent, spawn, run-a-skill, run-a-script). It
    **delivers events to agents that already exist** rather than starting a fresh container each time.
 
-3. **Config bundle** (shareable, in git) — a Program's authored setup: roles, skills, oracle configs,
-   actions, onboarding recipes. It lives as **text** in a `pam-{program}` repo (e.g.
-   `pam-openlibrary`), version-controlled and PR-able. **Publish** it; others **pull** it.
+3. **Config bundle** (shareable, in git) — a Program's authored setup: roles, **skills**, oracle
+   configs, **actions**, onboarding recipes. It lives as **text** in a `pam-{program}` repo (e.g.
+   `pam-openlibrary`), version-controlled and PR-able. **Publish** it, **register** it into the
+   central Registry (a PR to the official PAM repo), and others **pull/install** it by name.
 
 ## The parts of PAM (names)
 
@@ -33,14 +36,18 @@ Clear names for the pieces, so we all mean the same thing:
 
 | Part | What it is |
 |---|---|
-| **Registry** | The SQLite store of recorded state — Programs, agents, memberships, roles, projects, repo/KB pointers. |
-| **Runtime** | PAM's execution layer: watch event sources → decide → dispatch to durable agents. **Actions** (trigger + handler) are its plugins. |
-| **Program** | A configured instance (OL, Lenny, PAM-itself). Bundles repos, a Knowledge Base, an Oracle definition, roles, Actions, config. Shareable as `pam-{program}`. |
+| **Store** | Your machine's local SQLite recorded state — installed Programs, agents, memberships, projects, phase. (Earlier drafts called this the local "registry".) |
+| **Registry** | The central, public index of published Programs, in the **official PAM repo**. You **register** a Program by opening a PR that adds it — git-native, like dockerhub/pypi. |
+| **Runtime** | PAM's execution layer: watch event sources → decide → dispatch to durable agents. **Actions** are its plugins. |
+| **Program** | A configured instance (OL, Lenny, PAM-itself). Bundles repos, a Knowledge Base, an Oracle definition, Roles, Skills, Actions, config. Shareable as `pam-{program}`. |
 | **Oracle** | The verification layer. A Program's **Oracle definition** (ordered guard states) is how PAM determines an agent's state for a Project. External, pinned — not vendored. |
 | **Knowledge Base (KB)** | A Program-level shared knowledge repo (e.g. `ol-kb`). Authored/shared, part of the Program. |
+| **Skills** | Reusable agent capabilities packaged with a Program — **distinct from Actions**: a Skill is a capability an agent *uses*; an Action is a trigger that *invokes* work. |
+| **Actions** | The Runtime's plugins: a **trigger** (event or schedule) + a **handler** (deliver / spawn / run-skill / run-script). |
 | **Agent** | A first-class, Program-independent teammate (stable ULID + reusable name). |
-| **Role / Membership** | A seedable role catalog; a membership joins an agent to a Program with a role + reporting line. |
-| **Project** | A unit of work — a forge epic — worked in an isolated **worktree**. |
+| **Role** | A definition in a seedable catalog (`program_lead`/`division_lead`/`ada_agent` + your own); carries permissions. |
+| **Membership** | Joins an agent to a Program with a Role + a reporting line. **Distinct from Role**: the Role is the definition, the Membership is the binding. |
+| **Project** | A unit of work — projected onto a **forge epic** in GitHub-backed Programs — worked in an isolated **worktree**. |
 
 This is the next generation of **ADA (Atomic Agent)** — see https://mek.fyi/papers/ada. The ADA
 philosophies carry over (atomic agents, the shared Knowledge Base, worktrees, actions); PAM pulls
@@ -111,7 +118,7 @@ pam status
 
 ## Status
 
-Early but runnable. **Shipped:** the registry CLI (Programs, repos, agents, memberships, roles,
+Early but runnable. **Shipped:** the Store + CLI (Programs, repos, agents, memberships, roles,
 projects; origin-verified binding; full relaunch spec). **In progress:** Program publish/install
 (`pam-{program}`), the Runtime + actions, and the forge adapter + computed agent/project
 state. Assembled from a working implementation in reviewable units, not written fresh.
