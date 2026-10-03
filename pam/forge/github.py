@@ -127,6 +127,10 @@ class GitHubForge:
     def issue_labels(self, repo: str, number) -> list[str]:
         return self.issue(repo, number)["labels"]
 
+    def pr_comments(self, repo: str, number) -> list[dict]:
+        d = self._json(["pr", "view", str(number), "--repo", repo, "--json", "comments"])
+        return (d or {}).get("comments", [])
+
     def list_issues(self, repo: str, state: str = "open", limit: int = 50) -> list[dict]:
         d = self._json(["issue", "list", "--repo", repo, "--state", state,
                         "--limit", str(limit), "--json", self._ISSUE_FIELDS])

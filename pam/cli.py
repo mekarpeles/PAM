@@ -214,6 +214,40 @@ def cmd_agent_state(args):
         print(f"  {s['status']:10} {s['category']:20} {loc:22} {s['reason']}")
 
 
+def cmd_agent_ledger(args):
+    db.init()
+    from .forge import ForgeError, get_forge
+    from .state import ledger as L
+    agent = db.get_agent(args.name)
+    if not agent:
+        _die(f"no such agent: {args.name}")
+    refs = [w for w in db.agent_work(agent["id"]) if w["sub_ref"] and w["repo_url"]]
+    if not refs:
+        _die(f"{args.name} has no PR-bound work (assign one: pam project assign ... --sub N)")
+    prog = db.get_program(refs[0]["program_id"])
+    forge = get_forge(prog["tracker"] if prog else "github")
+    for w in refs:
+        try:
+            pr = forge.pr(w["repo_url"], w["sub_ref"])
+            comments = forge.pr_comments(w["repo_url"], w["sub_ref"])
+        except ForgeError as e:
+            _die(f"forge error: {e}")
+        head = (pr.get("head_sha") or "")
+        text = L.extract_ledger(comments)
+        print(f"{agent['name']}  {w['repo_name']}#{w['sub_ref']}  (head {head[:7] or '?'})")
+        if not text:
+            print("  (no ledger comment found)")
+            continue
+        s = L.summarize(text, head)
+        c = s["counts"]
+        print(f"  DONE {c['done']}  STALE {c['stale']}  ASSERTED {c['asserted']}  OPEN {c['open']}"
+              + ("  — clean as of HEAD" if s["clean"] else ""))
+        for name in ("stale", "asserted", "open"):
+            for e in s["buckets"][name]:
+                sha = f"@{e.sha[:7]}" if e.sha else ""
+                print(f"    [{name}] [{e.status}{sha}] {e.desc}")
+
+
 def cmd_project_state(args):
     db.init()
     from .forge import ForgeError, get_forge
@@ -518,6 +552,8 @@ def build_parser() -> argparse.ArgumentParser:
     art = agent.add_parser("retire"); art.add_argument("name"); art.set_defaults(func=cmd_agent_retire)
     ast2 = agent.add_parser("state", help="computed work state (from forge signals)")
     ast2.add_argument("name"); ast2.set_defaults(func=cmd_agent_state)
+    alg = agent.add_parser("ledger", help="per-requirement ledger (done/stale/asserted/open vs HEAD)")
+    alg.add_argument("name"); alg.set_defaults(func=cmd_agent_ledger)
 
     mem = sub.add_parser("membership", help="agent<->program memberships").add_subparsers(dest="sub")
     ma = mem.add_parser("add")
