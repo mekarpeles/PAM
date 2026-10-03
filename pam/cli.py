@@ -8,7 +8,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from . import __version__, config, db, gitutil
+from . import __version__, config, db, gitutil, program_config
 
 
 def _die(msg: str, code: int = 1):
@@ -201,6 +201,171 @@ def cmd_status(args):
         print(f"    members: {len(mems)}   projects: {len(projs)}")
 
 
+def cmd_program_init(args):
+    db.init()
+    p = db.get_program(args.name)
+    if not p:
+        _die(f"no such program: {args.name}")
+    cfg_path = p["config_path"]
+    if not cfg_path:
+        repos = db.list_repos(p["id"])
+        if not repos:
+            _die("program has no repo; add one first (pam program add-repo)")
+        cfg_path = str(program_config.default_path(repos[0]["path"]))
+    path, created = program_config.scaffold(cfg_path, name=p["name"], framework=p["framework"] or "")
+    db.set_program_config_path(p["id"], str(path))
+    if created:
+        print(f"scaffolded Program config: {path}")
+    else:
+        print(f"config already exists (left untouched): {path}")
+    print("  edit it in the repo and commit it; PAM reads it live, never caches it.")
+
+
+def cmd_program_config(args):
+    db.init()
+    p = db.get_program(args.name)
+    if not p:
+        _die(f"no such program: {args.name}")
+    if not p["config_path"]:
+        _die(f"no config_path set; run: pam program init {args.name}")
+    cfg = program_config.load(p["config_path"])
+    if cfg is None:
+        _die(f"config not found/readable at {p['config_path']}")
+    print(f"# {p['config_path']} (read live)")
+    import json as _json
+    print(_json.dumps(cfg, indent=2))
+
+
+# ---- membership & team ------------------------------------------------------
+
+def cmd_membership_add(args):
+    db.init()
+    p = db.get_program(args.program)
+    if not p:
+        _die(f"no such program: {args.program}")
+    agent = db.get_agent(args.agent, active_only=True)
+    if not agent:
+        _die(f"no active agent: {args.agent}")
+    role = db.get_role(p["id"], args.role)
+    if not role:
+        _die(f"no such role: {args.role}")
+    reports_to_id = None
+    if args.reports_to:
+        rm = db.membership_of(args.reports_to, p["id"])
+        if not rm:
+            _die(f"--reports-to: '{args.reports_to}' is not a member of '{p['name']}'")
+        reports_to_id = rm["id"]
+    team_id = None
+    if args.team:
+        t = db.get_team(p["id"], args.team)
+        if not t:
+            _die(f"no such team: {args.team} (pam team add {args.team} --program {p['name']})")
+        team_id = t["id"]
+    db.add_membership(agent["id"], p["id"], role["id"], team_id=team_id, reports_to_id=reports_to_id)
+    print(f"'{agent['name']}' joined '{p['name']}' as {role['key']}")
+
+
+def cmd_membership_ls(args):
+    db.init()
+    p = db.get_program(args.program)
+    if not p:
+        _die(f"no such program: {args.program}")
+    for m in db.list_memberships(p["id"]):
+        rt = ""
+        if m["reports_to_id"]:
+            rt = "  reports_to=" + m["reports_to_id"]
+        print(f"  {m['agent_name']:18} {m['role_key']:14}{rt}")
+
+
+def cmd_team_add(args):
+    db.init()
+    p = db.get_program(args.program)
+    if not p:
+        _die(f"no such program: {args.program}")
+    t = db.add_team(p["id"], args.name)
+    print(f"team '{t['name']}' added to '{p['name']}'")
+
+
+def cmd_team_ls(args):
+    db.init()
+    p = db.get_program(args.program)
+    if not p:
+        _die(f"no such program: {args.program}")
+    for t in db.list_teams(p["id"]):
+        print(f"  {t['name']}")
+
+
+# ---- projects ---------------------------------------------------------------
+
+def cmd_project_add(args):
+    db.init()
+    p = db.get_program(args.program)
+    if not p:
+        _die(f"no such program: {args.program}")
+    owner_id = None
+    if args.lead:
+        lm = db.membership_of(args.lead, p["id"])
+        if not lm:
+            _die(f"--lead: '{args.lead}' is not a member of '{p['name']}'")
+        owner_id = lm["id"]
+    repo_id = None
+    if args.repo:
+        repos = {r["name"]: r for r in db.list_repos(p["id"])}
+        if args.repo not in repos:
+            _die(f"no such repo in program: {args.repo}")
+        repo_id = repos[args.repo]["id"]
+    proj = db.add_project(p["id"], title=args.title, repo_id=repo_id, kind=args.kind,
+                          forge_ref=args.epic, owner_id=owner_id, year=args.year)
+    print(f"project '{proj['title']}' [{proj['id']}] added to '{p['name']}'"
+          + (f" (epic {args.epic})" if args.epic else ""))
+
+
+def cmd_project_ls(args):
+    db.init()
+    pid = None
+    if args.program:
+        p = db.get_program(args.program)
+        if not p:
+            _die(f"no such program: {args.program}")
+        pid = p["id"]
+    projs = db.list_projects(program_id=pid, year=args.year)
+    if not projs:
+        print("(no projects)")
+        return
+    for pr in projs:
+        members = db.list_project_members(pr["id"])
+        print(f"  {pr['title']:32} {pr['kind']} {pr['forge_ref'] or '':>6}  "
+              f"agents={len(members)}")
+
+
+def cmd_project_show(args):
+    db.init()
+    pr = db.get_project(args.project)
+    if not pr:
+        _die(f"no such project: {args.project}")
+    print(f"Project: {pr['title']} [{pr['id']}]  {pr['kind']} {pr['forge_ref'] or ''}")
+    print("  agents:")
+    for m in db.list_project_members(pr["id"]):
+        print(f"    - {m['agent_name']:16} {m['agent_status']:8} sub={m['sub_ref'] or '-'}")
+
+
+def cmd_project_assign(args):
+    db.init()
+    pr = db.get_project(args.project)
+    if not pr:
+        _die(f"no such project: {args.project}")
+    agent = db.get_agent(args.agent, active_only=True)
+    if not agent:
+        _die(f"no active agent: {args.agent}")
+    staffed_by = None
+    if args.by:
+        b = db.get_agent(args.by)
+        staffed_by = b["id"] if b else None
+    db.add_project_member(pr["id"], agent["id"], sub_ref=args.sub, staffed_by=staffed_by)
+    print(f"assigned '{agent['name']}' to '{pr['title']}'"
+          + (f" (sub-issue {args.sub})" if args.sub else ""))
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="pam", description="PAM registry")
     p.add_argument("--version", action="version", version=f"pam {__version__}")
@@ -227,6 +392,10 @@ def build_parser() -> argparse.ArgumentParser:
     par.add_argument("--default-branch", default="main", dest="default_branch")
     par.add_argument("--force", action="store_true")
     par.set_defaults(func=cmd_program_add_repo)
+    pin = prog.add_parser("init", help="scaffold the authored config bundle into the repo")
+    pin.add_argument("name"); pin.set_defaults(func=cmd_program_init)
+    pcf = prog.add_parser("config", help="show the authored config (read live)")
+    pcf.add_argument("name"); pcf.set_defaults(func=cmd_program_config)
 
     role = sub.add_parser("role", help="list roles").add_subparsers(dest="sub")
     rl = role.add_parser("ls"); rl.add_argument("--program", default=None)
@@ -247,6 +416,36 @@ def build_parser() -> argparse.ArgumentParser:
     ash = agent.add_parser("show"); ash.add_argument("name"); ash.set_defaults(func=cmd_agent_show)
     arv = agent.add_parser("resolve"); arv.add_argument("name"); arv.set_defaults(func=cmd_agent_resolve)
     art = agent.add_parser("retire"); art.add_argument("name"); art.set_defaults(func=cmd_agent_retire)
+
+    mem = sub.add_parser("membership", help="agent<->program memberships").add_subparsers(dest="sub")
+    ma = mem.add_parser("add")
+    ma.add_argument("agent"); ma.add_argument("--program", required=True)
+    ma.add_argument("--role", required=True); ma.add_argument("--reports-to", default=None, dest="reports_to")
+    ma.add_argument("--team", default=None); ma.set_defaults(func=cmd_membership_add)
+    ml = mem.add_parser("ls"); ml.add_argument("--program", required=True)
+    ml.set_defaults(func=cmd_membership_ls)
+
+    team = sub.add_parser("team", help="teams within a Program").add_subparsers(dest="sub")
+    ta = team.add_parser("add"); ta.add_argument("name"); ta.add_argument("--program", required=True)
+    ta.set_defaults(func=cmd_team_add)
+    tl = team.add_parser("ls"); tl.add_argument("--program", required=True)
+    tl.set_defaults(func=cmd_team_ls)
+
+    proj = sub.add_parser("project", help="Projects (= forge epics)").add_subparsers(dest="sub")
+    pja = proj.add_parser("add")
+    pja.add_argument("title"); pja.add_argument("--program", required=True)
+    pja.add_argument("--lead", default=None, help="owning Division Lead (agent)")
+    pja.add_argument("--epic", default=None, help="forge issue number of the epic")
+    pja.add_argument("--repo", default=None); pja.add_argument("--kind", default="epic")
+    pja.add_argument("--year", type=int, default=None); pja.set_defaults(func=cmd_project_add)
+    pjl = proj.add_parser("ls")
+    pjl.add_argument("--program", default=None); pjl.add_argument("--year", type=int, default=None)
+    pjl.set_defaults(func=cmd_project_ls)
+    pjs = proj.add_parser("show"); pjs.add_argument("project"); pjs.set_defaults(func=cmd_project_show)
+    pjx = proj.add_parser("assign")
+    pjx.add_argument("project"); pjx.add_argument("--agent", required=True)
+    pjx.add_argument("--sub", default=None); pjx.add_argument("--by", default=None)
+    pjx.set_defaults(func=cmd_project_assign)
 
     sub.add_parser("status", help="my Programs and their leads").set_defaults(func=cmd_status)
     return p

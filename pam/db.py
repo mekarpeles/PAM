@@ -437,3 +437,106 @@ def list_projects(program_id=None, year=None) -> list[dict]:
         return [dict(r) for r in conn.execute(q, params).fetchall()]
     finally:
         conn.close()
+
+
+def get_project(ref, program_id=None) -> Optional[dict]:
+    conn = connect()
+    try:
+        if program_id:
+            r = conn.execute(
+                "SELECT * FROM projects WHERE (id=? OR title=?) AND program_id=?",
+                (ref, ref, program_id),
+            ).fetchone()
+        else:
+            r = conn.execute(
+                "SELECT * FROM projects WHERE id=? OR title=?", (ref, ref)
+            ).fetchone()
+        return _row(r)
+    finally:
+        conn.close()
+
+
+def add_project_member(project_id, agent_id, sub_ref=None, staffed_by=None) -> dict:
+    conn = connect()
+    try:
+        mid = ulid()
+        conn.execute(
+            "INSERT INTO project_members(id,project_id,agent_id,sub_ref,staffed_by,staffed_at,active)"
+            " VALUES(?,?,?,?,?,?,1)",
+            (mid, project_id, agent_id, sub_ref, staffed_by, _now()),
+        )
+        conn.commit()
+        return _row(conn.execute(
+            "SELECT * FROM project_members WHERE id=?", (mid,)).fetchone())
+    finally:
+        conn.close()
+
+
+def list_project_members(project_id) -> list[dict]:
+    conn = connect()
+    try:
+        return [dict(r) for r in conn.execute(
+            "SELECT pm.*, a.name AS agent_name, a.status AS agent_status"
+            " FROM project_members pm JOIN agents a ON a.id=pm.agent_id"
+            " WHERE pm.project_id=? AND pm.active=1 ORDER BY a.name",
+            (project_id,),
+        ).fetchall()]
+    finally:
+        conn.close()
+
+
+# ---- teams ------------------------------------------------------------------
+
+def add_team(program_id, name) -> dict:
+    conn = connect()
+    try:
+        tid = ulid()
+        conn.execute(
+            "INSERT INTO teams(id,program_id,name,created_at) VALUES(?,?,?,?)",
+            (tid, program_id, name, _now()),
+        )
+        conn.commit()
+        return _row(conn.execute("SELECT * FROM teams WHERE id=?", (tid,)).fetchone())
+    finally:
+        conn.close()
+
+
+def get_team(program_id, name) -> Optional[dict]:
+    conn = connect()
+    try:
+        return _row(conn.execute(
+            "SELECT * FROM teams WHERE program_id=? AND (id=? OR name=?)",
+            (program_id, name, name),
+        ).fetchone())
+    finally:
+        conn.close()
+
+
+def list_teams(program_id) -> list[dict]:
+    conn = connect()
+    try:
+        return [dict(r) for r in conn.execute(
+            "SELECT * FROM teams WHERE program_id=? ORDER BY name", (program_id,)
+        ).fetchall()]
+    finally:
+        conn.close()
+
+
+# ---- misc -------------------------------------------------------------------
+
+def set_program_config_path(program_id, config_path) -> None:
+    conn = connect()
+    try:
+        conn.execute("UPDATE programs SET config_path=? WHERE id=?", (config_path, program_id))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def role_permits(role: dict, permission: str) -> bool:
+    """Advisory permission check. Roles carry a JSON array of permissions."""
+    try:
+        perms = json.loads(role.get("permissions") or "[]")
+    except (ValueError, TypeError):
+        perms = []
+    return permission in perms

@@ -38,6 +38,20 @@ agent that already exists** rather than starting one.
 - **Not a place for secrets.** It needs credentials to poll; it does not store them.
 - **Not a replacement for Actions.** Where an Action works, use one. PAM is for the cases above.
 
+## Getting started
+
+- **[docs/quickstart.md](docs/quickstart.md)** — set up a team from scratch (copy-paste runnable).
+- **[docs/plan.md](docs/plan.md)** — the build plan and data model.
+- Backlog: the [issues](https://github.com/mekarpeles/PAM/issues) on this repo (epic #5).
+
+```bash
+pip install -e .          # the `pam` CLI
+pam program add <name> --repo <url> --path <dir>
+pam agent onboard <name> --program <name> --role program_lead
+pam status
+```
+
 ## Status
 
-Early. Assembled from a working implementation in reviewable units, not written fresh.
+Early but runnable. Phase 1–2 land a working CLI registry (Programs, agents, memberships, roles,
+projects); see the quickstart. Assembled from a working implementation in reviewable units.
