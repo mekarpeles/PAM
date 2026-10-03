@@ -154,6 +154,9 @@ SEED_ROLES = [
     ("ada_agent", "ADA agent",
      "Atomic agent that owns one PR end to end (issue -> PR -> review -> merge -> cleanup).",
      [], {"oracle_bundle": "oracle.yml", "onboarding_recipe": "ada"}),
+    ("agent", "Agent",
+     "A general-purpose team member that is not the atomic development agent.",
+     [], {}),
 ]
 
 
@@ -268,6 +271,14 @@ def get_repo(repo_id) -> Optional[dict]:
     conn = connect()
     try:
         return _row(conn.execute("SELECT * FROM repos WHERE id=?", (repo_id,)).fetchone())
+    finally:
+        conn.close()
+
+
+def get_repo_by_path(path) -> Optional[dict]:
+    conn = connect()
+    try:
+        return _row(conn.execute("SELECT * FROM repos WHERE path=?", (path,)).fetchone())
     finally:
         conn.close()
 
@@ -452,7 +463,7 @@ def list_memberships(program_id) -> list[dict]:
             " FROM memberships m"
             " JOIN agents a ON a.id=m.agent_id"
             " JOIN roles  r ON r.id=m.role_id"
-            " WHERE m.program_id=? AND m.active=1"
+            " WHERE m.program_id=? AND m.active=1 AND a.status='active'"
             " ORDER BY r.key, a.name",
             (program_id,),
         ).fetchall()]

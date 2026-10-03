@@ -6,10 +6,10 @@ Program that binds its placeholders, so it ships with PAM rather than as a separ
 
 ## What is here
 
-- `AGENTS.md` — the ADA manual. Short on purpose. It is project agnostic: every project name is a
+- `AGENTS.md`: the ADA manual. Short on purpose. It is project agnostic: every project name is a
   placeholder a Program binds (see the placeholders skill, pending, below). A Program's `.pam/` binds
   those placeholders; a bare agent reads this file to know the job.
-- `oracle.yml` — the generic Oracle definition: the checks true of any issue-to-PR unit of work,
+- `oracle.yml`: the generic Oracle definition: the checks true of any issue-to-PR unit of work,
   ordered by cost of being wrong, not by phase. It declares `requires_optional: MUX` for checks that
   need the multiplexer, which PAM supplies and a Program composes in by id. It carries no
   project-specific checks.

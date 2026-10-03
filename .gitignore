@@ -9,8 +9,8 @@ dist/
 .venv/
 venv/
 
-# PAM local state (never commit recorded state)
-.pam/
+# PAM recorded state lives in ~/.pam (home), never in the repo. The repo's own .pam/
+# (authored Program config) IS committed, so it is not ignored here.
 *.db
 *.db-wal
 *.db-shm

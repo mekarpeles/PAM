@@ -6,9 +6,10 @@ to tmux. Spawn/attach/resume/onboarding *acts* stay harness-side — PAM emits t
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 
-from . import __version__, bundle, config, db, gitutil, program_config
+from . import __version__, bundle, config, db, gitutil, initializer, program_config
 
 
 def _die(msg: str, code: int = 1):
@@ -21,6 +22,23 @@ def _repo_short(url: str) -> str:
 
 
 # ---- program ----------------------------------------------------------------
+
+def cmd_init(args):
+    db.init()
+    try:
+        r = initializer.init_program(args.path or os.getcwd(), name=args.name)
+    except ValueError as e:
+        _die(str(e))
+    p = r["program"]
+    if r["loaded"]:
+        print(f"pam: loaded existing Program '{p['name']}' for this repo ({r['pam_dir']})")
+    else:
+        print(f"pam init: Program '{p['name']}' created in {r['pam_dir']} "
+              f"(tracker {p['tracker']})")
+    print(f"  commit {r['pam_dir']}/ with your code; it is the shared Program config.")
+    print(f"  add team members: pam agent onboard <name> --program {p['name']} --role <role>")
+    print("  built-in roles: program_lead, division_lead, ada_agent, agent")
+
 
 def cmd_program_add(args):
     db.init()
@@ -485,6 +503,11 @@ def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="pam", description="PAM registry")
     p.add_argument("--version", action="version", version=f"pam {__version__}")
     sub = p.add_subparsers(dest="cmd")
+
+    pin = sub.add_parser("init", help="initialize a Program in this repo (creates .pam/)")
+    pin.add_argument("--path", default=None, help="repo path (default: current directory)")
+    pin.add_argument("--name", default=None, help="Program name (default: inferred from origin)")
+    pin.set_defaults(func=cmd_init)
 
     prog = sub.add_parser("program", help="manage Programs").add_subparsers(dest="sub")
     pa = prog.add_parser("add", help="register a Program + its first repo")

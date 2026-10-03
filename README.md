@@ -1,4 +1,4 @@
-# PAM — Project Agentic Management
+# PAM: Project Agentic Management
 
 **PAM is one tool for running AI agents against real projects.** It gives you ADA, an atomic
 development agent that takes a single unit of work from an issue to a pull request and then stops, and
@@ -32,16 +32,16 @@ clones the repo gets the setup, not your running agents.
 
 ## The three layers
 
-1. **Store** (`~/.pam/`, SQLite) — the recorded state: which Programs you have, your agents,
+1. **Store** (`~/.pam/`, SQLite), the recorded state: which Programs you have, your agents,
    memberships, projects, phase. Agents are first-class and Program-independent; they join a Program
    through a membership that carries a role and a reporting line. Every agent has a stable ULID id and
    a reusable display name, and reusing a name can never merge two agents' histories.
-2. **Runtime + Actions** (PAM's execution layer) — the reason PAM exists. The Runtime watches your
-   issue and PR environment and turns changes into action. Actions are its plugins, modeled on GitHub
-   Actions: a trigger (an event or a schedule) plus a handler (deliver to an existing agent, spawn,
-   run a skill, run a script). It delivers to agents that already exist rather than starting a fresh
-   container each time.
-3. **Program config** in the repo's `.pam/` — the authored setup: roles, skills, the Oracle checks for
+2. **Runtime + Actions** (PAM's execution layer). ADA does the work; the Runtime is the management
+   layer that keeps a fleet of agents fed from events. It watches your issue and PR environment and
+   turns changes into action. Actions are its plugins, modeled on GitHub Actions: a trigger (an event
+   or a schedule) plus a handler (deliver to an existing agent, spawn, run a skill, run a script). It
+   delivers to agents that already exist rather than starting a fresh container each time.
+3. **Program config** in the repo's `.pam/`, the authored setup: roles, skills, the Oracle checks for
    this project, actions, the label to state map. Text, version-controlled, reviewed through the same
    PRs as the code.
 
@@ -91,30 +91,30 @@ dry-run by default; real dispatch goes through the cmux seam. A test keeps the n
   See [docs/conventions.md](docs/conventions.md).
 - No em-dashes or other AI-slop constructs in anything we write.
 
-## Getting started (what works today)
-
-The target entry point is `pam init` in a repo. It is the next thing being built. What runs today:
+## Getting started
 
 ```bash
 pip install -e .
-pam program add OpenLibrary --repo internetarchive/openlibrary --path ~/Projects/openlibrary --framework ada
-pam program init OpenLibrary      # scaffolds the authored config
-pam agent onboard ada --program OpenLibrary --role program_lead
+cd ~/Projects/openlibrary
+pam init                                   # creates .pam/ for this repo, infers the tracker
+pam agent onboard ada      --program openlibrary --role program_lead
+pam agent onboard reviewer --program openlibrary --role agent
 pam agent ls ; pam status
 ```
 
-More in [docs/quickstart.md](docs/quickstart.md) and [docs/plan.md](docs/plan.md). Backlog and design
-history are the [issues](https://github.com/mekarpeles/PAM/issues).
+`pam init` creates the repo's `.pam/` (commit it) and registers the Program in your `~/.pam`. More in
+[docs/quickstart.md](docs/quickstart.md) and [docs/plan.md](docs/plan.md). Backlog and design history
+are the [issues](https://github.com/mekarpeles/PAM/issues).
 
 ## Status
 
-**Shipped:** the Store and CLI (programs, repos, agents, memberships, roles, projects; origin-verified
-binding; full relaunch spec), the forge adapter, computed agent and project state plus the ledger
-renderer, and the Runtime decision core (action manifest loader, dedup/cooldown, dispatch interface,
-dry-run). ADA folded into `pam/agents/ada/`.
+**Shipped:** `pam init` and the `.pam/`-in-repo config model; the Store and CLI (programs, repos,
+agents, memberships, roles, projects; origin-verified binding; full relaunch spec), the forge adapter,
+computed agent and project state plus the ledger renderer, and the Runtime decision core (action
+manifest loader, dedup/cooldown, dispatch interface, dry-run). ADA folded into `pam/agents/ada/`.
 
-**Next:** `pam init` and the `.pam/`-in-repo config model; curating the ADA process, skills, and
-doctrine into a short set (not the old monolith); the Runtime poll loop and, gated, live dispatch.
+**Next:** curating the ADA process, skills, and doctrine into a short set (not the old monolith); the
+Runtime poll loop and, gated, live dispatch.
 
 **Deferred:** Program publish/install and a central Registry, both superseded by config-in-the-repo;
 the cmux integration; the community agent/skill marketplace (`pam registry`).

@@ -42,3 +42,15 @@ def normalize(url: str) -> str:
 
 def same_repo(a: str, b: str) -> bool:
     return normalize(a) == normalize(b)
+
+
+def current_branch(path: str | Path) -> str:
+    """Current branch name at `path`, or 'main' if it cannot be read."""
+    try:
+        out = subprocess.run(
+            ["git", "-C", str(path), "branch", "--show-current"],
+            capture_output=True, text=True, timeout=10,
+        )
+        return out.stdout.strip() or "main"
+    except Exception:
+        return "main"

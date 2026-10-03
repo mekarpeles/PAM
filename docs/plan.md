@@ -1,4 +1,4 @@
-# PAM — build plan (the general-purpose system)
+# PAM build plan (the general-purpose system)
 
 > **Reconciled 2026-10-03 (one-tool model). Read the [README](../README.md) first; it is canonical.**
 > The model consolidated to one tool, `pam`, with these changes to this plan:
