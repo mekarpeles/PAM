@@ -6,8 +6,10 @@ and gated behind --dispatch (and the #39-#42 blockers). This package never impor
 """
 from .actions import Action, ActionError, DEFAULT_COOLDOWN_H, load_actions  # noqa: F401
 from .decide import Fire, decide, matches, plan, signature  # noqa: F401
+from .dispatch import DispatchAdapter, Intent, NoopDispatcher, resolve_dispatch  # noqa: F401
 
 __all__ = [
     "Action", "ActionError", "DEFAULT_COOLDOWN_H", "load_actions",
     "Fire", "plan", "matches", "signature", "decide",
+    "DispatchAdapter", "Intent", "NoopDispatcher", "resolve_dispatch",
 ]
