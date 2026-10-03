@@ -39,6 +39,22 @@ pam project config openlibrary     # show the authored config (read live, never 
 ```
 Commit the `.pam/` directory with your code. It is the shared Project config.
 
+## 1b. Activate (per developer, like a virtualenv)
+
+`pam activate` sets who you are for this Project on this machine. It records your per-developer
+settings under `~/.pam/projects/<project>/` and never stores credentials: it points `gh` at a
+per-Project config dir so you authenticate once, as the Project's bot.
+
+```bash
+pam activate openlibrary --as openlibrary-bot
+# authenticate once, as prompted:
+GH_CONFIG_DIR=~/.pam/projects/openlibrary/gh gh auth login
+# optional virtualenv-style shell activation:
+eval "$(pam activate openlibrary --export)"
+```
+While active, forge and git actions run as the Project's identity. `pam status` shows the active
+Project; `pam deactivate` clears it.
+
 ## 2. Build the team
 
 ```bash

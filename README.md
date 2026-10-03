@@ -123,6 +123,7 @@ dry-run by default; real dispatch goes through the cmux seam. A test keeps the n
 pip install -e .
 cd ~/Projects/openlibrary
 pam init                                   # create .pam/ here; register the Project in ~/.pam
+pam activate openlibrary --as openlibrary-bot   # per-dev identity (virtualenv-style), no creds stored
 pam agent onboard ada      --project openlibrary --role project_lead
 pam agent onboard reviewer --project openlibrary --role agent
 pam agent ls ; pam status
@@ -134,13 +135,16 @@ are the [issues](https://github.com/mekarpeles/PAM/issues).
 
 ## Status
 
-**Shipped:** `pam init` and the `.pam/`-in-repo config model; the Store and CLI (Projects, repos,
-agents, memberships, roles, epics; origin-verified binding; full relaunch spec), the forge adapter,
-computed agent and epic state plus the ledger renderer, and the Runtime decision core (action manifest
-loader, dedup/cooldown, dispatch interface, dry-run). ADA folded into `pam/agents/ada/`.
+**Shipped:** `pam init` and the `.pam/`-in-repo config model, including the standalone-readable
+standards it seeds (`roles.md`, `agents/`); `pam onboard` writing the committed agent definition into
+`.pam/agents/<name>/`; `pam activate` (per-dev, per-Project identity and env, virtualenv-style, no
+credentials stored); the Store and CLI (Projects, repos, agents, memberships, roles, epics;
+origin-verified binding; full relaunch spec); the forge adapter; computed agent and epic state plus the
+ledger renderer; and the Runtime decision core (action manifest loader, dedup/cooldown, dispatch
+interface, dry-run). ADA folded into `pam/agents/ada/`.
 
-**Next:** curating the ADA process, skills, and doctrine into a short set (not the old monolith); the
-Runtime poll loop and, gated, live dispatch.
+**Next:** the cmux provisioning seam (`pam spawn`, issue #50); `pam kb`; the Runtime poll loop and,
+gated, live dispatch; curating the ADA process and skills into a short set.
 
 **Deferred:** Project publish/install and a central Registry, both superseded by config-in-the-repo;
 the cmux integration; the community agent/skill marketplace (`pam registry`).

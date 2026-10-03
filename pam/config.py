@@ -24,3 +24,13 @@ def agents_dir() -> Path:
 
 def projects_dir() -> Path:
     return pam_home() / "projects"
+
+
+def project_dir(name: str) -> Path:
+    """Per-developer, per-Project private settings dir (the virtualenv half)."""
+    return projects_dir() / name
+
+
+def active_marker() -> Path:
+    """File holding the name of the currently activated Project (per developer)."""
+    return pam_home() / "active"

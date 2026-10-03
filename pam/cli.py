@@ -9,7 +9,8 @@ import argparse
 import os
 import sys
 
-from . import __version__, agent_def, bundle, config, db, gitutil, initializer, project_config
+from . import (__version__, activate, agent_def, bundle, config, db, gitutil, initializer,
+               project_config)
 
 
 def _die(msg: str, code: int = 1):
@@ -304,6 +305,9 @@ def cmd_status(args):
         print("You have no Projects.")
         return
     print(f"PAM: {len(progs)} project(s)")
+    act = activate.get_active()
+    if act:
+        print(f"  active: {act}")
     for p in progs:
         mems = db.list_memberships(p["id"])
         projs = db.list_epics(project_id=p["id"])
@@ -312,6 +316,50 @@ def cmd_status(args):
         for m in leads:
             print(f"    {m['role_key']:14} {m['agent_name']}")
         print(f"    members: {len(mems)}   epics: {len(projs)}")
+
+
+def cmd_activate(args):
+    db.init()
+    name = args.project
+    if not name:
+        repo = db.get_repo_by_path(os.path.abspath(os.getcwd()))
+        if repo:
+            name = db.get_project(repo["project_id"])["name"]
+    if not name:
+        _die("no project given and none bound to this directory; "
+             "run from a Project repo or: pam activate <project>")
+    p = db.get_project(name)
+    if not p:
+        _die(f"no such project: {name}")
+    ident = {"gh_account": args.as_account, "git_name": args.git_name, "git_email": args.git_email}
+    activate.save_settings(p["name"], ident)
+    activate.gh_config_dir(p["name"]).mkdir(parents=True, exist_ok=True)
+    activate.set_active(p["name"])
+    if args.export:
+        # stdout must carry ONLY the export lines so `eval "$(...)"` works.
+        print(activate.export_lines(p["name"]))
+        return
+    print(f"activated Project '{p['name']}'")
+    s = activate.load_settings(p["name"]).get("identity", {})
+    if s.get("gh_account"):
+        print(f"  gh account: {s['gh_account']}")
+    print(f"  settings: {activate.settings_path(p['name'])}")
+    if not activate.is_gh_authed(p["name"]):
+        print("  gh is not authed for this Project yet; authenticate once with:")
+        print(f"    GH_CONFIG_DIR={activate.gh_config_dir(p['name'])} gh auth login")
+    print(f'  shell activation (optional): eval "$(pam activate {p["name"]} --export)"')
+
+
+def cmd_deactivate(args):
+    db.init()
+    cur = activate.get_active()
+    activate.clear_active()
+    if not cur:
+        print("no active Project")
+        return
+    print(f"deactivated Project '{cur}'")
+    print("  if you eval-activated a shell, clear the env: unset PAM_ACTIVE_PROJECT GH_CONFIG_DIR "
+          "GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL")
 
 
 def cmd_project_init(args):
@@ -620,6 +668,16 @@ def build_parser() -> argparse.ArgumentParser:
     pjst.add_argument("epic"); pjst.set_defaults(func=cmd_epic_state)
 
     sub.add_parser("status", help="my Projects and their leads").set_defaults(func=cmd_status)
+
+    act = sub.add_parser("activate", help="activate a Project (per-dev identity + env)")
+    act.add_argument("project", nargs="?", default=None, help="Project name (default: from cwd)")
+    act.add_argument("--as", dest="as_account", default=None, help="gh account to act as")
+    act.add_argument("--git-name", dest="git_name", default=None)
+    act.add_argument("--git-email", dest="git_email", default=None)
+    act.add_argument("--export", action="store_true", help="print shell export lines for eval")
+    act.set_defaults(func=cmd_activate)
+    sub.add_parser("deactivate", help="deactivate the current Project").set_defaults(
+        func=cmd_deactivate)
     return p
 
 
