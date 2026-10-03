@@ -28,7 +28,9 @@ pam --version
 
 `pam init` is like `git init`. Run it in a repo. It creates `.pam/` (the shared config), infers the
 issue tracker from the origin remote, and registers the Project in your `~/.pam`. If `.pam/` already
-exists, `pam` just loads it.
+exists, `pam` just loads it. It also seeds the standalone-readable standards: `.pam/roles.md` (the role
+catalog) and a `.pam/agents/` directory that `pam onboard` fills. Those read on their own, so a
+teammate who never runs pam still gets the standardized roles and the ADA process from the repo.
 
 ```bash
 cd ~/Projects/openlibrary

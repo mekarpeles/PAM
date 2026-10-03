@@ -66,3 +66,28 @@ def test_init_refuses_non_repo(mods, tmp_path):
 def test_generic_agent_role_seeded(mods):
     db, _ = mods
     assert any(r["key"] == "agent" for r in db.list_roles())
+
+
+def test_init_seeds_standalone_standards(mods, tmp_path):
+    db, initializer = mods
+    repo = tmp_path / "myrepo"
+    _git_repo(repo)
+    initializer.init_project(str(repo))
+
+    roles_md = repo / ".pam" / "roles.md"
+    assert roles_md.exists()
+    text = roles_md.read_text()
+    for key in ("project_lead", "division_lead", "ada_agent", "agent"):
+        assert f"## {key}:" in text
+    assert "pam/agents/ada/" in text          # ADA process pointer for standalone readers
+    assert (repo / ".pam" / "agents").is_dir()
+
+
+def test_init_does_not_clobber_edited_roles(mods, tmp_path):
+    db, initializer = mods
+    repo = tmp_path / "myrepo"
+    _git_repo(repo)
+    initializer.init_project(str(repo))
+    (repo / ".pam" / "roles.md").write_text("# my roles\n")
+    initializer.init_project(str(repo))       # idempotent load
+    assert (repo / ".pam" / "roles.md").read_text() == "# my roles\n"

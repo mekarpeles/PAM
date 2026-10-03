@@ -15,6 +15,40 @@ PAM_DIR = ".pam"
 CONFIG = "project.toml"
 
 
+def roles_doc() -> str:
+    """Render the seeded role catalog as a human-readable standard for `.pam/roles.md`."""
+    lines = [
+        "# Team roles",
+        "",
+        "The standard roles PAM seeds for a Project: the shared vocabulary for who does what.",
+        "This file reads on its own; you do not need to run pam or cmux to use it as a team standard.",
+        "",
+    ]
+    for key, title, desc, perms, cfg in db.SEED_ROLES:
+        lines += [f"## {key}: {title}", "", desc]
+        if perms:
+            lines += ["", f"Permissions: {', '.join(perms)}."]
+        if cfg.get("onboarding_recipe") == "ada":
+            lines += ["", "The ADA process and manual ship with PAM at `pam/agents/ada/` "
+                      "(`AGENTS.md`, `docs/process.md`)."]
+        lines.append("")
+    lines += ["Edit this file to add Project-specific roles or tailor descriptions. PAM reads roles "
+              "from the Store; this file is the human-readable standard.", ""]
+    return "\n".join(lines)
+
+
+def scaffold_standards(pam_dir: str) -> None:
+    """Seed the standalone-valuable standards into `.pam/`: roles.md and an agents/ dir.
+
+    Idempotent and non-clobbering: existing files are left as hand-edited.
+    """
+    os.makedirs(os.path.join(pam_dir, "agents"), exist_ok=True)
+    roles_path = os.path.join(pam_dir, "roles.md")
+    if not os.path.exists(roles_path):
+        with open(roles_path, "w") as fh:
+            fh.write(roles_doc())
+
+
 def init_project(cwd: str, name: str | None = None) -> dict:
     cwd = os.path.abspath(cwd)
     origin = gitutil.origin(cwd)
@@ -30,6 +64,7 @@ def init_project(cwd: str, name: str | None = None) -> dict:
         prog = db.get_project(existing_repo["project_id"])
         os.makedirs(pam_dir, exist_ok=True)
         project_config.scaffold(cfg_path, name=prog["name"], framework=prog["framework"] or "ada")
+        scaffold_standards(pam_dir)
         if prog.get("config_path") != cfg_path:
             db.set_project_config_path(prog["id"], cfg_path)
         return {"project": prog, "pam_dir": pam_dir, "loaded": True}
@@ -40,6 +75,7 @@ def init_project(cwd: str, name: str | None = None) -> dict:
     branch = gitutil.current_branch(cwd)
     os.makedirs(pam_dir, exist_ok=True)
     project_config.scaffold(cfg_path, name=pname, framework="ada")
+    scaffold_standards(pam_dir)
     prog = db.add_project(name=pname, framework="ada", tracker=tracker, config_path=cfg_path)
     short = gitutil.normalize(origin).split("/")[-1]
     db.add_repo(prog["id"], name=short, repo_url=origin, path=cwd, origin=origin,
