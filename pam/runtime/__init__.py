@@ -1,4 +1,4 @@
-"""The PAM Runtime — the event->action execution layer (see docs/runtime-design.md).
+"""The PAM Runtime: the event->action execution layer (see docs/runtime-design.md).
 
 The decision core here is pure and tmux-free: it loads actions, matches triggers, and produces a
 plan. Dry-run by default; real dispatch is an injected DispatchAdapter at the cmux seam, built later

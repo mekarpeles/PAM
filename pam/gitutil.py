@@ -1,6 +1,6 @@
 """Read-only git helpers for verifying that a registered path is bound to the expected repo.
 
-A registration is a bound path: `pam program add` checks the path's `origin` remote against the
+A registration is a bound path: `pam project add` checks the path's `origin` remote against the
 declared repo and refuses on mismatch (a binding was silently re-pointed to a different repo of the
 same name once). Re-checked at spawn via `pam verify-binding`.
 """

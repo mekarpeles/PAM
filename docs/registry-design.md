@@ -1,5 +1,7 @@
 # PAM registry — design
 
+> **Terminology (updated 2026-10-03):** earlier design doc. In current terms, Program is now **Project** (the repo-rooted container) and the old Project is now **Epic** (a bundle of issues). See the README for the current model.
+
 **Status:** design, for review. Design before code — this PR adds no executable code.
 **Answers:** [`BRIEF-registry.md`](../BRIEF-registry.md) (Mek's direction, 2026-10-02), as routed by Ada.
 **Scope of this unit:** the SQLite schema (stable-id decision made), the PAM/cmux authority

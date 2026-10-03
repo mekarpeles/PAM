@@ -1,4 +1,4 @@
-"""ADA's ledger engine (adopted proven version) — parse, classify, escalation validation."""
+"""ADA's ledger engine (adopted proven version): parse, classify, escalation validation."""
 from pam.agents.ada import ledger as L
 from pam.agents.ada import where_are_we as W
 

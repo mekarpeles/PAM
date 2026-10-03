@@ -1,8 +1,8 @@
-"""The authored Program config bundle.
+"""The authored Project config bundle.
 
-A Program's config — role overrides, the label->state map, Oracle defaults, onboarding recipes, and
-pointers to the Program's PM sources — lives as a TOML file IN THE PROGRAM'S REPO, version-controlled,
-and is read live at call time (never cached in PAM's DB). `pam program init` scaffolds a starter;
+A Project's config (role overrides, the label->state map, Oracle defaults, onboarding recipes, and
+pointers to the Project's PM sources) lives as a TOML file IN THE PROJECT'S REPO, version-controlled,
+and is read live at call time (never cached in PAM's DB). `pam project init` scaffolds a starter;
 `load()` reads it. SQLite holds only recorded facts.
 """
 from __future__ import annotations
@@ -17,42 +17,42 @@ except ModuleNotFoundError:  # pragma: no cover
 
 
 def default_path(repo_path: str | Path) -> Path:
-    """Default location for a Program's config bundle inside its repo."""
-    return Path(repo_path) / "pam.program.toml"
+    """Default location for a Project's config bundle inside its repo."""
+    return Path(repo_path) / ".pam" / "project.toml"
 
 
 TEMPLATE = """\
-# PAM Program config — authored, version-controlled, read live by PAM (never cached).
-# Scaffolded by `pam program init`. Edit freely; PAM reads it at call time.
+# PAM Project config: authored, version-controlled, read live by PAM (never cached).
+# Scaffolded by `pam project init`. Edit freely; PAM reads it at call time.
 
-[program]
+[project]
 name = "{name}"
 framework = "{framework}"
 
-# Roles beyond PAM's built-ins (program_lead / division_lead / ada_agent).
-# Define program-specific agent types here; each can carry an oracle bundle + onboarding recipe.
+# Roles beyond PAM's built-ins (project_lead / division_lead / ada_agent).
+# Define project-specific agent types here; each can carry an oracle bundle + onboarding recipe.
 # [[roles]]
 # key = "reviewer"
 # title = "Independent Reviewer"
 # permissions = []
 
-# How this Program's forge labels map to kanban states (Monitor-mode colors).
+# How this Project's forge labels map to kanban states (Monitor-mode colors).
 [labels.state]
 "State: Icebox"      = "icebox"
 "State: In Progress" = "in_progress"
 "State: Blocked"     = "blocked"
 "State: Done"        = "done"
 
-# Which issue label marks a Project/epic, and how sub-issues reference it.
-[projects]
+# Which issue label marks an Epic, and how sub-issues reference it.
+[epics]
 epic_label = "Type: Epic"
 subtask_label = "Type: Subtask"
 
-# Oracle defaults for this Program's ADA agents (per-agent overridable).
+# Oracle defaults for this Project's ADA agents (per-agent overridable).
 [oracle]
 default_bundle = "oracle.yml"
 
-# Pointers to this Program's PM sources (read live; never mirrored into PAM).
+# Pointers to this Project's PM sources (read live; never mirrored into PAM).
 [pm]
 # milestone = "current"
 # goals_doc = "docs/goals.md"

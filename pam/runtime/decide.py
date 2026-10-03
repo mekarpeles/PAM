@@ -1,7 +1,7 @@
-"""Runtime decision core (issue #28) — match actions to subjects, compute a dry-run plan.
+"""Runtime decision core (issue #28): match actions to subjects, compute a dry-run plan.
 
 Pure and side-effect-free: it reads action manifests + subject signals + the last-fire record and
-returns a plan (the fires it WOULD dispatch). It never dispatches and never writes — recording a fire
+returns a plan (the fires it WOULD dispatch). It never dispatches and never writes; recording a fire
 is the dispatcher's job (the live, gated path), so two dry-runs are identical.
 
 Dedup (review #35): an action fires only when its signature is new or changed, or its per-action

@@ -1,6 +1,6 @@
-"""Action manifests — declarative Runtime plugins (issue #29).
+"""Action manifests: declarative Runtime plugins (issue #29).
 
-An action is a `.toml` file in a Program bundle's `actions/` (generic ones ship with PAM). It wires a
+An action is a `.toml` file in a Project bundle's `actions/` (generic ones ship with PAM). It wires a
 trigger to a handler:
 
     [trigger]                      # exactly one of event | schedule
@@ -15,7 +15,7 @@ trigger to a handler:
 
     cooldown_h = 4                 # optional; per-action (spawn should not cooldown-suppress)
 
-Pure parsing/loading only — no network, no tmux, no dispatch. The content_hash feeds the Runtime
+Pure parsing/loading only, no network, no tmux, no dispatch. The content_hash feeds the Runtime
 dedup key so an *edited* action re-fires (review #35).
 """
 from __future__ import annotations
@@ -103,7 +103,7 @@ def load_dir(path) -> dict[str, Action]:
         try:
             data = tomllib.loads(raw)
         except tomllib.TOMLDecodeError as e:
-            raise ActionError(f"{f.stem}: invalid TOML — {e}")
+            raise ActionError(f"{f.stem}: invalid TOML: {e}")
         out[f.stem] = parse_action(data, f.stem, raw)
     return out
 

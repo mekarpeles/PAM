@@ -1,4 +1,4 @@
-"""GitHub forge adapter — cheap, read-only signal gathering via the `gh` CLI.
+"""GitHub forge adapter: cheap, read-only signal gathering via the `gh` CLI.
 
 Generalized from openlibrary-pam's new_pr_bot.py. Dependency-free (shells `gh`) and tmux-free. The
 command runner is injectable so this is fully testable without network: pass `run=` a callable
@@ -91,7 +91,7 @@ def normalize_issue(raw: dict) -> dict:
 
 
 def kanban_state(labels, mapping: dict) -> Optional[str]:
-    """Map forge labels -> a Program's kanban state via the Program's label->state map."""
+    """Map forge labels -> a Project's kanban state via the Project's label->state map."""
     for lb in labels or []:
         if lb in mapping:
             return mapping[lb]

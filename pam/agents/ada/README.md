@@ -2,16 +2,16 @@
 
 ADA is a single agent that owns one unit of work end to end, from an issue to a pull request, and
 then stops. It is PAM's default agent type. It lives here because ADA only means anything inside a
-Program that binds its placeholders, so it ships with PAM rather than as a separate tool.
+Project that binds its placeholders, so it ships with PAM rather than as a separate tool.
 
 ## What is here
 
 - `AGENTS.md`: the ADA manual. Short on purpose. It is project agnostic: every project name is a
-  placeholder a Program binds (see the placeholders skill, pending, below). A Program's `.pam/` binds
+  placeholder a Project binds (see the placeholders skill, pending, below). A Project's `.pam/` binds
   those placeholders; a bare agent reads this file to know the job.
 - `oracle.yml`: the generic Oracle definition: the checks true of any issue-to-PR unit of work,
   ordered by cost of being wrong, not by phase. It declares `requires_optional: MUX` for checks that
-  need the multiplexer, which PAM supplies and a Program composes in by id. It carries no
+  need the multiplexer, which PAM supplies and a Project composes in by id. It carries no
   project-specific checks.
 
 ## The engine
@@ -21,16 +21,16 @@ Program that binds its placeholders, so it ships with PAM rather than as a separ
   as of a sha, stale, asserted, or open, and is non-monotonic by design (a rebase un-does `tested`).
   `ledger.py` also validates escalations (an `escalated` entry must name its kind and what it
   searched). `pam agent ledger` renders the same buckets for an operator.
-- A Program's own Oracle checks (for example how to run that project's app) live in the Program's
+- A Project's own Oracle checks (for example how to run that project's app) live in the Project's
   `.pam/`, not here. Generic ADA stays project agnostic.
 
 ## docs/
 
 The lean, generic docs the manual references, curated from ada-framework (not the old monolith):
 - `docs/process.md`: the end-to-end process, plan to handoff.
-- `docs/skills/placeholders.md`: the complete list of placeholders a Program binds.
+- `docs/skills/placeholders.md`: the complete list of placeholders a Project binds.
 - `docs/skills/worktree-setup.md`: one isolated worktree per issue (generic; project-specific setup
-  like submodules, hooks, and a running stack lives in the Program's `.pam/`).
+  like submodules, hooks, and a running stack lives in the Project's `.pam/`).
 - `docs/skills/adversarial-review.md`: the blind subagent review before a PR is marked ready.
 
 ## Still deferred (tracked)

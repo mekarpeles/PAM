@@ -18,12 +18,12 @@ def pam_db(tmp_path, monkeypatch):
 
 def test_seed_roles_present(pam_db):
     keys = {r["key"] for r in pam_db.list_roles()}
-    assert {"program_lead", "division_lead", "ada_agent"} <= keys
+    assert {"project_lead", "division_lead", "ada_agent"} <= keys
 
 
-def test_program_and_agent_roundtrip(pam_db):
-    prog = pam_db.add_program("openlibrary", framework="ada", gh_account="openlibrary-bot")
-    assert pam_db.get_program("openlibrary")["id"] == prog["id"]
+def test_project_and_agent_roundtrip(pam_db):
+    prog = pam_db.add_project("openlibrary", framework="ada", gh_account="openlibrary-bot")
+    assert pam_db.get_project("openlibrary")["id"] == prog["id"]
 
     role = pam_db.get_role(prog["id"], "ada_agent")
     agent = pam_db.add_agent("pr-123-fix", cwd="/tmp/wt", last_session_id="sess-abc")

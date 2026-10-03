@@ -1,4 +1,4 @@
-"""Action manifest loader — pure parsing/validation (no network, no tmux)."""
+"""Action manifest loader: pure parsing/validation (no network, no tmux)."""
 import textwrap
 
 import pytest

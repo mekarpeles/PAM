@@ -1,8 +1,8 @@
-"""PAM registry — SQLite storage for *recorded* state only.
+"""PAM Store: SQLite storage for *recorded* state only.
 
 Generalizes cmux's agents.db (WAL, per-key upserts). Holds who exists, memberships, parentage,
-projects, assignments, asserted phase. Never stores the authored config bundle (that is read live
-from the Program's repo). This module MUST NOT import cmux.
+epics, assignments, asserted phase. Never stores the authored config bundle (that is read live
+from the Project's repo). This module MUST NOT import cmux.
 """
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ class ActiveNameExists(Exception):
 
 
 SCHEMA = """
-CREATE TABLE IF NOT EXISTS programs (
+CREATE TABLE IF NOT EXISTS projects (
     id          TEXT PRIMARY KEY,
     name        TEXT NOT NULL UNIQUE,
     framework   TEXT,
@@ -32,14 +32,14 @@ CREATE TABLE IF NOT EXISTS programs (
 
 CREATE TABLE IF NOT EXISTS repos (
     id             TEXT PRIMARY KEY,
-    program_id     TEXT NOT NULL REFERENCES programs(id) ON DELETE CASCADE,
+    project_id     TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
     name           TEXT NOT NULL,
     repo_url       TEXT NOT NULL,
     path           TEXT NOT NULL,
     origin         TEXT NOT NULL,
     default_branch TEXT NOT NULL DEFAULT 'main',
     created_at     TEXT NOT NULL,
-    UNIQUE(program_id, name)
+    UNIQUE(project_id, name)
 );
 
 CREATE TABLE IF NOT EXISTS agents (
@@ -65,40 +65,40 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_one_active_agent_per_name
 
 CREATE TABLE IF NOT EXISTS teams (
     id          TEXT PRIMARY KEY,
-    program_id  TEXT NOT NULL REFERENCES programs(id) ON DELETE CASCADE,
+    project_id  TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
     name        TEXT NOT NULL,
     created_at  TEXT NOT NULL,
-    UNIQUE(program_id, name)
+    UNIQUE(project_id, name)
 );
 
 CREATE TABLE IF NOT EXISTS roles (
     id          TEXT PRIMARY KEY,
-    program_id  TEXT NOT NULL DEFAULT '',   -- '' = built-in seed role (not program-scoped)
+    project_id  TEXT NOT NULL DEFAULT '',   -- '' = built-in seed role (not project-scoped)
     key         TEXT NOT NULL,
     title       TEXT,
     description TEXT,
     permissions TEXT NOT NULL DEFAULT '[]', -- JSON array
     config      TEXT NOT NULL DEFAULT '{}', -- JSON object
     created_at  TEXT NOT NULL,
-    UNIQUE(program_id, key)
+    UNIQUE(project_id, key)
 );
 
 CREATE TABLE IF NOT EXISTS memberships (
     id            TEXT PRIMARY KEY,
     agent_id      TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
-    program_id    TEXT NOT NULL REFERENCES programs(id) ON DELETE CASCADE,
+    project_id    TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
     role_id       TEXT NOT NULL REFERENCES roles(id),
     team_id       TEXT REFERENCES teams(id),
     reports_to_id TEXT REFERENCES memberships(id),
     config        TEXT NOT NULL DEFAULT '{}',
     joined_at     TEXT NOT NULL,
     active        INTEGER NOT NULL DEFAULT 1,
-    UNIQUE(agent_id, program_id)
+    UNIQUE(agent_id, project_id)
 );
 
-CREATE TABLE IF NOT EXISTS projects (
+CREATE TABLE IF NOT EXISTS epics (
     id          TEXT PRIMARY KEY,
-    program_id  TEXT NOT NULL REFERENCES programs(id) ON DELETE CASCADE,
+    project_id  TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
     repo_id     TEXT REFERENCES repos(id),
     title       TEXT NOT NULL,
     kind        TEXT NOT NULL DEFAULT 'epic',
@@ -108,21 +108,21 @@ CREATE TABLE IF NOT EXISTS projects (
     created_at  TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS project_members (
+CREATE TABLE IF NOT EXISTS epic_members (
     id          TEXT PRIMARY KEY,
-    project_id  TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    epic_id  TEXT NOT NULL REFERENCES epics(id) ON DELETE CASCADE,
     agent_id    TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
     sub_ref     TEXT,
     staffed_by  TEXT REFERENCES agents(id),
     staffed_at  TEXT NOT NULL,
     active      INTEGER NOT NULL DEFAULT 1,
-    UNIQUE(project_id, agent_id)
+    UNIQUE(epic_id, agent_id)
 );
 
 CREATE TABLE IF NOT EXISTS phase_assertions (
     id           TEXT PRIMARY KEY,
     agent_id     TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
-    project_id   TEXT REFERENCES projects(id),
+    epic_id   TEXT REFERENCES epics(id),
     repo_id      TEXT REFERENCES repos(id),
     phase        TEXT NOT NULL,
     asserted_sha TEXT,
@@ -145,12 +145,12 @@ CREATE TABLE IF NOT EXISTS runtime_fires (
 
 # key, title, description, permissions, config
 SEED_ROLES = [
-    ("program_lead", "Program Lead",
-     "Owns the Program: settings, docs, configuration; allocates reviewers; settles inter-lead disputes.",
-     ["manage_program", "manage_projects", "onboard_agents", "allocate_reviewers"], {}),
-    ("division_lead", "Division / Project Lead",
-     "Domain expert and project manager for a set of Projects; unblocks agents as a consultant.",
-     ["manage_projects", "onboard_agents"], {}),
+    ("project_lead", "Project Lead",
+     "Owns the Project: settings, docs, configuration; allocates reviewers; settles inter-lead disputes.",
+     ["manage_project", "manage_epics", "onboard_agents", "allocate_reviewers"], {}),
+    ("division_lead", "Division / Epic Lead",
+     "Domain expert and epic manager for a set of Epics; unblocks agents as a consultant.",
+     ["manage_epics", "onboard_agents"], {}),
     ("ada_agent", "ADA agent",
      "Atomic agent that owns one PR end to end (issue -> PR -> review -> merge -> cleanup).",
      [], {"oracle_bundle": "oracle.yml", "onboarding_recipe": "ada"}),
@@ -193,10 +193,10 @@ def init() -> None:
         _migrate(conn)
         for key, title, desc, perms, cfg in SEED_ROLES:
             if not conn.execute(
-                "SELECT 1 FROM roles WHERE program_id='' AND key=?", (key,)
+                "SELECT 1 FROM roles WHERE project_id='' AND key=?", (key,)
             ).fetchone():
                 conn.execute(
-                    "INSERT INTO roles(id,program_id,key,title,description,permissions,config,created_at)"
+                    "INSERT INTO roles(id,project_id,key,title,description,permissions,config,created_at)"
                     " VALUES(?,?,?,?,?,?,?,?)",
                     (ulid(), "", key, title, desc, json.dumps(perms), json.dumps(cfg), _now()),
                 )
@@ -205,51 +205,51 @@ def init() -> None:
         conn.close()
 
 
-# ---- programs & repos -------------------------------------------------------
+# ---- projects & repos -------------------------------------------------------
 
-def add_program(name, framework=None, tracker="github", gh_account=None, config_path=None) -> dict:
+def add_project(name, framework=None, tracker="github", gh_account=None, config_path=None) -> dict:
     conn = connect()
     try:
         pid = ulid()
         conn.execute(
-            "INSERT INTO programs(id,name,framework,tracker,gh_account,config_path,created_at)"
+            "INSERT INTO projects(id,name,framework,tracker,gh_account,config_path,created_at)"
             " VALUES(?,?,?,?,?,?,?)",
             (pid, name, framework, tracker, gh_account, config_path, _now()),
         )
         conn.commit()
-        return _row(conn.execute("SELECT * FROM programs WHERE id=?", (pid,)).fetchone())
+        return _row(conn.execute("SELECT * FROM projects WHERE id=?", (pid,)).fetchone())
     finally:
         conn.close()
 
 
-def get_program(ref) -> Optional[dict]:
+def get_project(ref) -> Optional[dict]:
     conn = connect()
     try:
         return _row(conn.execute(
-            "SELECT * FROM programs WHERE id=? OR name=?", (ref, ref)
+            "SELECT * FROM projects WHERE id=? OR name=?", (ref, ref)
         ).fetchone())
     finally:
         conn.close()
 
 
-def list_programs() -> list[dict]:
+def list_projects() -> list[dict]:
     conn = connect()
     try:
         return [dict(r) for r in conn.execute(
-            "SELECT * FROM programs ORDER BY created_at"
+            "SELECT * FROM projects ORDER BY created_at"
         ).fetchall()]
     finally:
         conn.close()
 
 
-def add_repo(program_id, name, repo_url, path, origin, default_branch="main") -> dict:
+def add_repo(project_id, name, repo_url, path, origin, default_branch="main") -> dict:
     conn = connect()
     try:
         rid = ulid()
         conn.execute(
-            "INSERT INTO repos(id,program_id,name,repo_url,path,origin,default_branch,created_at)"
+            "INSERT INTO repos(id,project_id,name,repo_url,path,origin,default_branch,created_at)"
             " VALUES(?,?,?,?,?,?,?,?)",
-            (rid, program_id, name, repo_url, path, origin, default_branch, _now()),
+            (rid, project_id, name, repo_url, path, origin, default_branch, _now()),
         )
         conn.commit()
         return _row(conn.execute("SELECT * FROM repos WHERE id=?", (rid,)).fetchone())
@@ -257,11 +257,11 @@ def add_repo(program_id, name, repo_url, path, origin, default_branch="main") ->
         conn.close()
 
 
-def list_repos(program_id) -> list[dict]:
+def list_repos(project_id) -> list[dict]:
     conn = connect()
     try:
         return [dict(r) for r in conn.execute(
-            "SELECT * FROM repos WHERE program_id=? ORDER BY name", (program_id,)
+            "SELECT * FROM repos WHERE project_id=? ORDER BY name", (project_id,)
         ).fetchall()]
     finally:
         conn.close()
@@ -285,25 +285,25 @@ def get_repo_by_path(path) -> Optional[dict]:
 
 # ---- roles ------------------------------------------------------------------
 
-def get_role(program_id, key) -> Optional[dict]:
-    """Program-scoped role wins over a built-in seed role of the same key."""
+def get_role(project_id, key) -> Optional[dict]:
+    """Project-scoped role wins over a built-in seed role of the same key."""
     conn = connect()
     try:
         r = conn.execute(
-            "SELECT * FROM roles WHERE program_id=? AND key=?", (program_id, key)
+            "SELECT * FROM roles WHERE project_id=? AND key=?", (project_id, key)
         ).fetchone()
         if r is None:
             r = conn.execute(
-                "SELECT * FROM roles WHERE program_id='' AND key=?", (key,)
+                "SELECT * FROM roles WHERE project_id='' AND key=?", (key,)
             ).fetchone()
         return _row(r)
     finally:
         conn.close()
 
 
-def add_role(program_id, key, title=None, description=None,
+def add_role(project_id, key, title=None, description=None,
              permissions=None, config=None) -> dict:
-    """Create a program-scoped role (program_id='' would be a built-in seed)."""
+    """Create a project-scoped role (project_id='' would be a built-in seed)."""
     conn = connect()
     try:
         if isinstance(permissions, (list, dict)):
@@ -312,9 +312,9 @@ def add_role(program_id, key, title=None, description=None,
             config = json.dumps(config)
         rid = ulid()
         conn.execute(
-            "INSERT INTO roles(id,program_id,key,title,description,permissions,config,created_at)"
+            "INSERT INTO roles(id,project_id,key,title,description,permissions,config,created_at)"
             " VALUES(?,?,?,?,?,?,?,?)",
-            (rid, program_id, key, title, description,
+            (rid, project_id, key, title, description,
              permissions or "[]", config or "{}", _now()),
         )
         conn.commit()
@@ -323,16 +323,16 @@ def add_role(program_id, key, title=None, description=None,
         conn.close()
 
 
-def list_roles(program_id=None) -> list[dict]:
+def list_roles(project_id=None) -> list[dict]:
     conn = connect()
     try:
-        if program_id:
+        if project_id:
             rows = conn.execute(
-                "SELECT * FROM roles WHERE program_id IN ('', ?) ORDER BY program_id, key",
-                (program_id,),
+                "SELECT * FROM roles WHERE project_id IN ('', ?) ORDER BY project_id, key",
+                (project_id,),
             ).fetchall()
         else:
-            rows = conn.execute("SELECT * FROM roles ORDER BY program_id, key").fetchall()
+            rows = conn.execute("SELECT * FROM roles ORDER BY project_id, key").fetchall()
         return [dict(r) for r in rows]
     finally:
         conn.close()
@@ -426,15 +426,15 @@ def retire_agent(ref) -> Optional[dict]:
 
 # ---- memberships ------------------------------------------------------------
 
-def add_membership(agent_id, program_id, role_id, team_id=None,
+def add_membership(agent_id, project_id, role_id, team_id=None,
                    reports_to_id=None, config_json=None) -> dict:
     conn = connect()
     try:
         mid = ulid()
         conn.execute(
-            "INSERT INTO memberships(id,agent_id,program_id,role_id,team_id,reports_to_id,"
+            "INSERT INTO memberships(id,agent_id,project_id,role_id,team_id,reports_to_id,"
             "config,joined_at,active) VALUES(?,?,?,?,?,?,?,?,1)",
-            (mid, agent_id, program_id, role_id, team_id, reports_to_id,
+            (mid, agent_id, project_id, role_id, team_id, reports_to_id,
              config_json or "{}", _now()),
         )
         conn.commit()
@@ -443,19 +443,19 @@ def add_membership(agent_id, program_id, role_id, team_id=None,
         conn.close()
 
 
-def membership_of(agent_ref, program_id) -> Optional[dict]:
+def membership_of(agent_ref, project_id) -> Optional[dict]:
     conn = connect()
     try:
         return _row(conn.execute(
             "SELECT m.* FROM memberships m JOIN agents a ON a.id=m.agent_id"
-            " WHERE (a.id=? OR a.name=?) AND m.program_id=? AND m.active=1",
-            (agent_ref, agent_ref, program_id),
+            " WHERE (a.id=? OR a.name=?) AND m.project_id=? AND m.active=1",
+            (agent_ref, agent_ref, project_id),
         ).fetchone())
     finally:
         conn.close()
 
 
-def list_memberships(program_id) -> list[dict]:
+def list_memberships(project_id) -> list[dict]:
     conn = connect()
     try:
         return [dict(r) for r in conn.execute(
@@ -463,39 +463,39 @@ def list_memberships(program_id) -> list[dict]:
             " FROM memberships m"
             " JOIN agents a ON a.id=m.agent_id"
             " JOIN roles  r ON r.id=m.role_id"
-            " WHERE m.program_id=? AND m.active=1 AND a.status='active'"
+            " WHERE m.project_id=? AND m.active=1 AND a.status='active'"
             " ORDER BY r.key, a.name",
-            (program_id,),
+            (project_id,),
         ).fetchall()]
     finally:
         conn.close()
 
 
-# ---- projects ---------------------------------------------------------------
+# ---- epics ---------------------------------------------------------------
 
-def add_project(program_id, title, repo_id=None, kind="epic",
+def add_epic(project_id, title, repo_id=None, kind="epic",
                 forge_ref=None, owner_id=None, year=None) -> dict:
     conn = connect()
     try:
         pid = ulid()
         conn.execute(
-            "INSERT INTO projects(id,program_id,repo_id,title,kind,forge_ref,owner_id,year,created_at)"
+            "INSERT INTO epics(id,project_id,repo_id,title,kind,forge_ref,owner_id,year,created_at)"
             " VALUES(?,?,?,?,?,?,?,?,?)",
-            (pid, program_id, repo_id, title, kind, forge_ref, owner_id, year, _now()),
+            (pid, project_id, repo_id, title, kind, forge_ref, owner_id, year, _now()),
         )
         conn.commit()
-        return _row(conn.execute("SELECT * FROM projects WHERE id=?", (pid,)).fetchone())
+        return _row(conn.execute("SELECT * FROM epics WHERE id=?", (pid,)).fetchone())
     finally:
         conn.close()
 
 
-def list_projects(program_id=None, year=None) -> list[dict]:
+def list_epics(project_id=None, year=None) -> list[dict]:
     conn = connect()
     try:
-        q, params = "SELECT * FROM projects", []
+        q, params = "SELECT * FROM epics", []
         clauses = []
-        if program_id:
-            clauses.append("program_id=?"); params.append(program_id)
+        if project_id:
+            clauses.append("project_id=?"); params.append(project_id)
         if year:
             clauses.append("year=?"); params.append(year)
         if clauses:
@@ -506,61 +506,61 @@ def list_projects(program_id=None, year=None) -> list[dict]:
         conn.close()
 
 
-def get_project(ref, program_id=None) -> Optional[dict]:
+def get_epic(ref, project_id=None) -> Optional[dict]:
     conn = connect()
     try:
-        if program_id:
+        if project_id:
             r = conn.execute(
-                "SELECT * FROM projects WHERE (id=? OR title=?) AND program_id=?",
-                (ref, ref, program_id),
+                "SELECT * FROM epics WHERE (id=? OR title=?) AND project_id=?",
+                (ref, ref, project_id),
             ).fetchone()
         else:
             r = conn.execute(
-                "SELECT * FROM projects WHERE id=? OR title=?", (ref, ref)
+                "SELECT * FROM epics WHERE id=? OR title=?", (ref, ref)
             ).fetchone()
         return _row(r)
     finally:
         conn.close()
 
 
-def add_project_member(project_id, agent_id, sub_ref=None, staffed_by=None) -> dict:
+def add_epic_member(epic_id, agent_id, sub_ref=None, staffed_by=None) -> dict:
     conn = connect()
     try:
         mid = ulid()
         conn.execute(
-            "INSERT INTO project_members(id,project_id,agent_id,sub_ref,staffed_by,staffed_at,active)"
+            "INSERT INTO epic_members(id,epic_id,agent_id,sub_ref,staffed_by,staffed_at,active)"
             " VALUES(?,?,?,?,?,?,1)",
-            (mid, project_id, agent_id, sub_ref, staffed_by, _now()),
+            (mid, epic_id, agent_id, sub_ref, staffed_by, _now()),
         )
         conn.commit()
         return _row(conn.execute(
-            "SELECT * FROM project_members WHERE id=?", (mid,)).fetchone())
+            "SELECT * FROM epic_members WHERE id=?", (mid,)).fetchone())
     finally:
         conn.close()
 
 
-def list_project_members(project_id) -> list[dict]:
+def list_epic_members(epic_id) -> list[dict]:
     conn = connect()
     try:
         return [dict(r) for r in conn.execute(
             "SELECT pm.*, a.name AS agent_name, a.status AS agent_status"
-            " FROM project_members pm JOIN agents a ON a.id=pm.agent_id"
-            " WHERE pm.project_id=? AND pm.active=1 ORDER BY a.name",
-            (project_id,),
+            " FROM epic_members pm JOIN agents a ON a.id=pm.agent_id"
+            " WHERE pm.epic_id=? AND pm.active=1 ORDER BY a.name",
+            (epic_id,),
         ).fetchall()]
     finally:
         conn.close()
 
 
 def agent_work(agent_id) -> list[dict]:
-    """Active work an agent owns: each project_member joined to its project + repo."""
+    """Active work an agent owns: each epic_member joined to its epic + repo."""
     conn = connect()
     try:
         return [dict(r) for r in conn.execute(
-            "SELECT pm.sub_ref, p.id AS project_id, p.title, p.forge_ref, p.program_id,"
+            "SELECT pm.sub_ref, p.id AS epic_id, p.title, p.forge_ref, p.project_id,"
             " r.name AS repo_name, r.repo_url"
-            " FROM project_members pm"
-            " JOIN projects p ON p.id=pm.project_id"
+            " FROM epic_members pm"
+            " JOIN epics p ON p.id=pm.epic_id"
             " LEFT JOIN repos r ON r.id=p.repo_id"
             " WHERE pm.agent_id=? AND pm.active=1",
             (agent_id,),
@@ -571,13 +571,13 @@ def agent_work(agent_id) -> list[dict]:
 
 # ---- teams ------------------------------------------------------------------
 
-def add_team(program_id, name) -> dict:
+def add_team(project_id, name) -> dict:
     conn = connect()
     try:
         tid = ulid()
         conn.execute(
-            "INSERT INTO teams(id,program_id,name,created_at) VALUES(?,?,?,?)",
-            (tid, program_id, name, _now()),
+            "INSERT INTO teams(id,project_id,name,created_at) VALUES(?,?,?,?)",
+            (tid, project_id, name, _now()),
         )
         conn.commit()
         return _row(conn.execute("SELECT * FROM teams WHERE id=?", (tid,)).fetchone())
@@ -585,22 +585,22 @@ def add_team(program_id, name) -> dict:
         conn.close()
 
 
-def get_team(program_id, name) -> Optional[dict]:
+def get_team(project_id, name) -> Optional[dict]:
     conn = connect()
     try:
         return _row(conn.execute(
-            "SELECT * FROM teams WHERE program_id=? AND (id=? OR name=?)",
-            (program_id, name, name),
+            "SELECT * FROM teams WHERE project_id=? AND (id=? OR name=?)",
+            (project_id, name, name),
         ).fetchone())
     finally:
         conn.close()
 
 
-def list_teams(program_id) -> list[dict]:
+def list_teams(project_id) -> list[dict]:
     conn = connect()
     try:
         return [dict(r) for r in conn.execute(
-            "SELECT * FROM teams WHERE program_id=? ORDER BY name", (program_id,)
+            "SELECT * FROM teams WHERE project_id=? ORDER BY name", (project_id,)
         ).fetchall()]
     finally:
         conn.close()
@@ -608,10 +608,10 @@ def list_teams(program_id) -> list[dict]:
 
 # ---- misc -------------------------------------------------------------------
 
-def set_program_config_path(program_id, config_path) -> None:
+def set_project_config_path(project_id, config_path) -> None:
     conn = connect()
     try:
-        conn.execute("UPDATE programs SET config_path=? WHERE id=?", (config_path, program_id))
+        conn.execute("UPDATE projects SET config_path=? WHERE id=?", (config_path, project_id))
         conn.commit()
     finally:
         conn.close()

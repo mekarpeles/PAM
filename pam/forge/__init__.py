@@ -1,7 +1,7 @@
-"""Forge adapters — read a Program's issue tracker/forge (GitHub first).
+"""Forge adapters: read a Project's issue tracker/forge (GitHub first).
 
 Cheap `gh`/REST signal gathering (PR state, CI, review decision, labels) behind a small tracker
-abstraction keyed off `programs.tracker`. Used to compute project kanban state (labels) and ADA-agent
+abstraction keyed off `projects.tracker`. Used to compute epic kanban state (labels) and ADA-agent
 state. Dependency-free and tmux-free; the command runner is injectable for testing.
 """
 from __future__ import annotations

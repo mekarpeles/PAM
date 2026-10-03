@@ -1,5 +1,7 @@
 # PAM Runtime — design (the event→action execution layer)
 
+> **Terminology (updated 2026-10-03):** earlier design doc. In current terms, Program is now **Project** (the repo-rooted container) and the old Project is now **Epic** (a bundle of issues). See the README for the current model.
+
 **Status:** design, for review. Design before code — this doc adds no executable code. Resolves the
 open questions PAMPaper raised in #35 (delivery idempotency, agent liveness, native SendMessage,
 config consistency) before the dispatch path — which acts on live agents — is built.

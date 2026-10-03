@@ -1,4 +1,4 @@
-"""Runtime decision core — pure matching/signature/verdict/plan (no network, no tmux)."""
+"""Runtime decision core: pure matching/signature/verdict/plan (no network, no tmux)."""
 import importlib
 from datetime import datetime, timedelta, timezone
 

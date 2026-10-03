@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "pam"
 version = "0.1.0"
-description = "PAM — a registry of Programs, agents, teams, projects, and their relationships"
+description = "PAM: one tool for running AI agents against your codebases"
 readme = "README.md"
 requires-python = ">=3.11"
 # No runtime deps: `pip install pam` must work on a machine with no tmux and no network.

@@ -1,5 +1,7 @@
 # PAM build plan (the general-purpose system)
 
+> **Terminology (updated 2026-10-03):** earlier design doc. In current terms, Program is now **Project** (the repo-rooted container) and the old Project is now **Epic** (a bundle of issues). See the README for the current model.
+
 > **Reconciled 2026-10-03 (one-tool model). Read the [README](../README.md) first; it is canonical.**
 > The model consolidated to one tool, `pam`, with these changes to this plan:
 > - ADA dissolves into PAM at `pam/agents/ada/`. There is no separate ADA repo and no standalone-vs-fold-in question.

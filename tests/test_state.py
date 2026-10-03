@@ -1,4 +1,4 @@
-"""Agent/project state: pure classifier branches + wiring with a fake forge (no network)."""
+"""Agent/epic state: pure classifier branches + wiring with a fake forge (no network)."""
 import importlib
 
 import pytest
@@ -9,7 +9,7 @@ def mods(tmp_path, monkeypatch):
     monkeypatch.setenv("PAM_HOME", str(tmp_path / "pam"))
     import pam.config as config
     import pam.db as db
-    import pam.program_config as pc
+    import pam.project_config as pc
     import pam.state.agent_state as st
     importlib.reload(config)
     importlib.reload(db)
@@ -70,21 +70,21 @@ def test_status_colors(mods):
 
 # ---- wiring -----------------------------------------------------------------
 
-def _program_with_work(db, sub_ref="42"):
-    prog = db.add_program("demo", framework="ada")
+def _project_with_work(db, sub_ref="42"):
+    prog = db.add_project("demo", framework="ada")
     repo = db.add_repo(prog["id"], "demo", "acme/demo", "/x", "acme/demo", "main")
     role = db.get_role(prog["id"], "ada_agent")
     agent = db.add_agent("pr-42-x")
     db.add_membership(agent["id"], prog["id"], role["id"])
-    proj = db.add_project(prog["id"], "Epic", repo_id=repo["id"], forge_ref="100")
+    proj = db.add_epic(prog["id"], "Epic", repo_id=repo["id"], forge_ref="100")
     if sub_ref is not None:
-        db.add_project_member(proj["id"], agent["id"], sub_ref=sub_ref)
+        db.add_epic_member(proj["id"], agent["id"], sub_ref=sub_ref)
     return prog, repo, agent, proj
 
 
 def test_for_agent_unassigned_does_not_touch_forge(mods):
     db, st, _, _ = mods
-    prog = db.add_program("demo")
+    prog = db.add_project("demo")
     agent = db.add_agent("loner")
     states = st.for_agent(BoomForge(), agent)  # must not call forge
     assert states[0]["category"] == "unassigned"
@@ -93,7 +93,7 @@ def test_for_agent_unassigned_does_not_touch_forge(mods):
 
 def test_for_agent_classifies_from_forge(mods):
     db, st, _, _ = mods
-    _, _, agent, _ = _program_with_work(db)
+    _, _, agent, _ = _project_with_work(db)
     forge = FakeForge(pr={"state": "OPEN", "ci": "passing", "review_decision": "REVIEW_REQUIRED"})
     states = st.for_agent(forge, agent)
     assert states[0]["category"] == "needs_review"
@@ -103,7 +103,7 @@ def test_for_agent_classifies_from_forge(mods):
 
 def test_for_agent_retired_is_spun_down(mods):
     db, st, _, _ = mods
-    _, _, agent, _ = _program_with_work(db)
+    _, _, agent, _ = _project_with_work(db)
     db.retire_agent(agent["id"])
     agent = db.get_agent(agent["id"])
     forge = FakeForge(pr={"state": "OPEN", "ci": "passing", "review_decision": "APPROVED"})
@@ -111,16 +111,16 @@ def test_for_agent_retired_is_spun_down(mods):
     assert states[0]["status"] == "spun_down" and states[0]["color"] == "red"
 
 
-def test_for_project_rollup_with_kanban(mods):
+def test_for_epic_rollup_with_kanban(mods):
     db, st, pc, tmp = mods
-    prog, repo, agent, proj = _program_with_work(db)
+    prog, repo, agent, proj = _project_with_work(db)
     # authored label->state map, read live
-    path, _ = pc.scaffold(tmp / "pam.program.toml", name="demo")
-    db.set_program_config_path(prog["id"], str(path))
-    proj = db.get_project(proj["id"])
+    path, _ = pc.scaffold(tmp / "pam.project.toml", name="demo")
+    db.set_project_config_path(prog["id"], str(path))
+    proj = db.get_epic(proj["id"])
     forge = FakeForge(pr={"state": "OPEN", "ci": "passing", "review_decision": "APPROVED"},
                       labels=["State: In Progress"])
-    roll = st.for_project(forge, proj)
+    roll = st.for_epic(forge, proj)
     assert roll["kanban"] == "in_progress"
     assert roll["agents"][0]["agent"] == "pr-42-x"
     assert roll["agents"][0]["category"] == "approved"

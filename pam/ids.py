@@ -1,8 +1,8 @@
-"""ULID generation — stdlib only (no third-party dependency).
+"""ULID generation, stdlib only (no third-party dependency).
 
 A ULID is a 26-char Crockford-base32 string: 48 bits of millisecond timestamp + 80 bits of
 randomness. Lexicographically sortable by creation time, collision-free without coordination, and
-independent of any display name — which is why PAM uses it as the immutable agent/program id while
+independent of any display name, which is why PAM uses it as the immutable agent/project id while
 the human-facing name stays a reusable label.
 """
 from __future__ import annotations
