@@ -31,12 +31,16 @@ atomic agent uses the ADA parts. A team running a fleet uses the rest.
 PAM splits state the way git does, and for the same reason.
 
 - **`.pam/` in the repo** holds the Project's authored config: the schema, the repos, the inferred
-  issue tracker, the ADA setup, roles, labels. It is committed and shared, like `.git/config` plus
-  tracked files. Clone the repo, run `pam init` (or it is already there and `pam` just loads it), and
-  you have the Project.
-- **`~/.pam/`** holds your per-developer recorded state: your agent home directories, their sessions,
-  and the Store (SQLite). It is per machine and never shared, like `~/.gitconfig`. `cq` and the
-  identity files live here too, in each agent's home.
+  issue tracker, the ADA setup, roles, labels, and the team definitions under `.pam/agents/<name>/`
+  (each agent's `agent.toml` plus a vanilla `identity.md`). It is committed and shared, like
+  `.git/config` plus tracked files, and it is valuable standalone: someone who never runs pam or cmux
+  still gets the standardized roles and the ADA process by reading it. Clone the repo, run `pam init`
+  (or it is already there and `pam` just loads it), and you have the Project.
+- **`~/.pam/`** holds your per-developer recorded state: the Store (SQLite) and your per-developer,
+  per-Project settings. It is per machine and never shared, like `~/.gitconfig`. The authored agent
+  definition lives in the repo's `.pam/agents/`; the live runtime home is provisioned by cmux at spawn
+  (named by the agent's uuid, with `cq` and the session there), not committed and not created by
+  onboard.
 
 So the authored half travels in the repo, and the recorded half stays on your machine. A teammate who
 clones the repo gets the setup, not your running agents.

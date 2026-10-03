@@ -9,7 +9,7 @@ import argparse
 import os
 import sys
 
-from . import __version__, bundle, config, db, gitutil, initializer, project_config
+from . import __version__, agent_def, bundle, config, db, gitutil, initializer, project_config
 
 
 def _die(msg: str, code: int = 1):
@@ -159,16 +159,21 @@ def cmd_agent_onboard(args):
              f"retire it first (pam agent retire {args.name}) before reusing the name")
     mem = db.add_membership(agent_id=agent["id"], project_id=p["id"],
                             role_id=role["id"], reports_to_id=reports_to_id)
-    # create the durable PAM-land home dir
-    try:
-        config.agents_dir().mkdir(parents=True, exist_ok=True)
-        (config.agents_dir() / agent["id"]).mkdir(exist_ok=True)
-    except OSError:
-        pass
+    # Write the committed, hand-editable definition into the repo's .pam/agents/<name>/.
+    # The runtime home is provisioned later by cmux (issue #50); onboard does not touch ~/.pam.
+    def_dir = None
+    if p["config_path"]:
+        pam_dir = os.path.dirname(p["config_path"])
+        def_dir, _created = agent_def.scaffold(
+            pam_dir, name=args.name, uuid=agent["id"], type_key=role["key"],
+            reports_to=args.reports_to or "")
     print(f"onboarded '{agent['name']}' [{agent['id']}] as {role['key']} in '{p['name']}'")
     if reports_to_id:
         print(f"  reports to: {args.reports_to}")
-    print(f"  home: {agent['home_path']}")
+    if def_dir:
+        print(f"  definition: {def_dir} (commit it; the runtime home is provisioned at spawn)")
+    else:
+        print("  note: run `pam init` in the repo to get a .pam/ for the committed definition")
     if agent["last_session_id"]:
         print(f"  resume: claude --resume {agent['last_session_id']} (cwd {agent['cwd'] or '?'})")
 

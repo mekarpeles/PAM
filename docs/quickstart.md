@@ -51,6 +51,12 @@ pam agent onboard pr-13163-tags --project openlibrary --role ada_agent \
   --reports-to imports-lead \
   --session-id <claude-session-uuid> --cwd ~/Projects/openlibrary-13163-tags
 ```
+Each onboard writes a committed definition to `.pam/agents/<name>/`: an `agent.toml` (name, stable
+uuid, type, reporting line) and a vanilla `identity.md` that `@link`s the type's manual shipped with
+the pam package. Commit `.pam/agents/` with your code; it is the shared, standalone-readable team
+definition. The runtime home is provisioned later by cmux at spawn, not by onboard, so onboard never
+writes to `~/.pam`.
+
 Onboarding a name that is already live is refused (reusing a name must never merge two agents'
 histories). Free a name first with `pam agent retire <name>`.
 
