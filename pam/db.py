@@ -130,6 +130,17 @@ CREATE TABLE IF NOT EXISTS phase_assertions (
     evidence     TEXT,
     created_at   TEXT NOT NULL
 );
+
+-- Runtime dedup/cooldown: one row per (action, subject). An action fires only when the signature
+-- is new or changed, or the per-action cooldown has elapsed (see docs/runtime-design.md).
+CREATE TABLE IF NOT EXISTS runtime_fires (
+    action_id     TEXT NOT NULL,
+    subject_ref   TEXT NOT NULL,
+    signature     TEXT,
+    last_fired_at TEXT,
+    fire_count    INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (action_id, subject_ref)
+);
 """
 
 # key, title, description, permissions, config
@@ -602,3 +613,33 @@ def role_permits(role: dict, permission: str) -> bool:
     except (ValueError, TypeError):
         perms = []
     return permission in perms
+
+
+# ---- runtime dedup ----------------------------------------------------------
+
+def get_fire(action_id, subject_ref) -> Optional[dict]:
+    conn = connect()
+    try:
+        return _row(conn.execute(
+            "SELECT * FROM runtime_fires WHERE action_id=? AND subject_ref=?",
+            (action_id, subject_ref),
+        ).fetchone())
+    finally:
+        conn.close()
+
+
+def record_fire(action_id, subject_ref, signature) -> None:
+    """Record that an action fired for a subject (dispatch-time; not called during dry-run)."""
+    conn = connect()
+    try:
+        conn.execute(
+            "INSERT INTO runtime_fires(action_id, subject_ref, signature, last_fired_at, fire_count)"
+            " VALUES(?,?,?,?,1)"
+            " ON CONFLICT(action_id, subject_ref) DO UPDATE SET"
+            " signature=excluded.signature, last_fired_at=excluded.last_fired_at,"
+            " fire_count=runtime_fires.fire_count+1",
+            (action_id, subject_ref, signature, _now()),
+        )
+        conn.commit()
+    finally:
+        conn.close()

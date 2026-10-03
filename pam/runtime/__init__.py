@@ -5,5 +5,9 @@ plan. Dry-run by default; real dispatch is an injected DispatchAdapter at the cm
 and gated behind --dispatch (and the #39-#42 blockers). This package never imports cmux.
 """
 from .actions import Action, ActionError, DEFAULT_COOLDOWN_H, load_actions  # noqa: F401
+from .decide import Fire, decide, matches, plan, signature  # noqa: F401
 
-__all__ = ["Action", "ActionError", "DEFAULT_COOLDOWN_H", "load_actions"]
+__all__ = [
+    "Action", "ActionError", "DEFAULT_COOLDOWN_H", "load_actions",
+    "Fire", "plan", "matches", "signature", "decide",
+]
