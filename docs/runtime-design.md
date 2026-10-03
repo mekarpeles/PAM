@@ -116,9 +116,49 @@ oracle/label-map at that SHA for the whole tick). Prevents a mid-tick edit from 
 Steps 1–2 are fully testable with no tmux and no network (injected forge). Real dispatch (step 3's
 cmux adapter) is gated behind `--dispatch` and reviewed separately because it acts on live agents.
 
-## Open decisions for review
+## Decisions (resolved, per stakeholder review #35 — override welcome)
 
-1. **Cooldown default** — heartbeat proposed 4h (match `ACTIVE_H`). Adopt 4h, or per-action?
-2. **`unknown`-health policy** — refuse+surface (proposed) vs. a bounded retry before surfacing?
-3. **Where the cmux DispatchAdapter lives** — in cmux (it imports `pam`), or a `pam-cmux` shim
-   package. Leaning: in cmux, since cmux already owns spawn/attach and may import PAM.
+1. **Cooldown is per-action, default 4h.** `spawn-on-assignment` must never cooldown-suppress;
+   `nag-on-stale` wants days. So cooldown is an action-level setting, 4h default.
+2. **`unknown`-health → refuse + surface + one bounded re-check**, never auto-deliver.
+3. **The cmux `DispatchAdapter` lives in cmux** — but the `DispatchAdapter` Protocol *and* a no-op
+   adapter stay in `pam` core, so steps 1–2 test tmux-free and the no-cmux-import test stays green.
+
+## Dispatch-path blockers (stakeholder review #35) — gate the LIVE path
+
+The pure decision core (steps 1–2) is safe to build as specified. **These must land before the cmux
+dispatch adapter**, because they only bite once PAM acts on live agents:
+
+- **B1 — spawn is a claim, not a pre-check (TOCTOU).** `no_running_session` checked-then-spawned lets
+  two overlapping ticks/retries both spawn. Fix: an **atomic claim row** in the Store —
+  `runtime_claims(subject_ref PRIMARY KEY, action_id, claimed_at, state)` with `INSERT … ON CONFLICT
+  DO NOTHING`; only the winner spawns. (issue → #39)
+- **B2 — respawn crash-loop.** If an agent died *from* its task, respawn+redeliver kills it again.
+  Fix: **respawn budget + backoff + quarantine-to-human**, and a defined **dirty-worktree policy** on
+  rehydrate (don't blow away uncommitted work). (→ #40)
+- **B3 — tick overlap.** The SHA pin is intra-tick; a minutes-long dispatch overlaps the next tick on
+  a new SHA. Fix: **non-overlapping ticks (a run lock)** or per-subject locks. (→ #41)
+- **B4 — fail-closed tick.** A partial forge read yields a plan on incomplete data (a false
+  `no_running_session`). Fix: apply the ledger's "refuse when a signal is unreadable" discipline at
+  **tick level — abort, don't dispatch**. (→ #42)
+
+### Delivery-semantics refinements (fold into steps 1–2)
+
+- **Dedup key additions:** (a) per-signal normalization, not a global digit-strip (the global strip
+  collapses "3 vs 30 review comments"); (b) include the **action's content-hash** in the key so an
+  *edited* action re-fires; (c) debounce ≠ cooldown (debounce = settle rapid changes; cooldown =
+  rate-limit repeats).
+- **Liveness:** name the health *signal* (not just the enum) — e.g. heartbeat file freshness + pane
+  liveness; `idle` delivery can still void without a **read/ack**, so delivery should confirm receipt.
+- **SHA pin = committed HEAD**, and warn that **uncommitted bundle edits silently don't take effect**
+  (so authors know to commit before a tick picks them up).
+
+### Store tables the Runtime adds
+
+`runtime_fires(action_id, subject_ref, last_signature, last_fired_at, fire_count)` (dedup/cooldown),
+`runtime_claims(subject_ref PK, action_id, claimed_at, state)` (B1), plus a run-lock row (B3).
+
+### Residual schema note
+
+`teams` and multi-hop `reports_to` are the only entities the Runtime does not consume — keep them
+minimal; don't elaborate until an Action or the Monitor view actually reads them.
