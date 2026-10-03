@@ -192,6 +192,48 @@ def cmd_agent_retire(args):
     print(f"retired '{a['name']}' [{a['id']}] — the name is now free to reuse")
 
 
+def cmd_agent_state(args):
+    db.init()
+    from .forge import ForgeError, get_forge
+    from .state import agent_state as st
+    agent = db.get_agent(args.name)
+    if not agent:
+        _die(f"no such agent: {args.name}")
+    work = db.agent_work(agent["id"])
+    tracker = "github"
+    if work:
+        prog = db.get_program(work[0]["program_id"])
+        tracker = prog["tracker"] if prog else "github"
+    try:
+        states = st.for_agent(get_forge(tracker), agent)
+    except ForgeError as e:
+        _die(f"forge error: {e}")
+    print(f"{agent['name']} [{agent['status']}]")
+    for s in states:
+        loc = f"{s['repo'] or '-'}#{s['ref']}" if s["ref"] else "(no work)"
+        print(f"  {s['status']:10} {s['category']:20} {loc:22} {s['reason']}")
+
+
+def cmd_project_state(args):
+    db.init()
+    from .forge import ForgeError, get_forge
+    from .state import agent_state as st
+    proj = db.get_project(args.project)
+    if not proj:
+        _die(f"no such project: {args.project}")
+    prog = db.get_program(proj["program_id"])
+    tracker = prog["tracker"] if prog else "github"
+    try:
+        roll = st.for_project(get_forge(tracker), proj)
+    except ForgeError as e:
+        _die(f"forge error: {e}")
+    print(f"Project: {roll['project']}  epic {roll['forge_ref'] or '-'}  "
+          f"kanban={roll['kanban'] or '-'}")
+    for a in roll["agents"]:
+        print(f"  {a['status']:10} {a['category']:20} {a['agent']:16} "
+              f"#{a['ref'] or '-'}  {a['reason']}")
+
+
 # ---- status -----------------------------------------------------------------
 
 def cmd_status(args):
@@ -474,6 +516,8 @@ def build_parser() -> argparse.ArgumentParser:
     ash = agent.add_parser("show"); ash.add_argument("name"); ash.set_defaults(func=cmd_agent_show)
     arv = agent.add_parser("resolve"); arv.add_argument("name"); arv.set_defaults(func=cmd_agent_resolve)
     art = agent.add_parser("retire"); art.add_argument("name"); art.set_defaults(func=cmd_agent_retire)
+    ast2 = agent.add_parser("state", help="computed work state (from forge signals)")
+    ast2.add_argument("name"); ast2.set_defaults(func=cmd_agent_state)
 
     mem = sub.add_parser("membership", help="agent<->program memberships").add_subparsers(dest="sub")
     ma = mem.add_parser("add")
@@ -504,6 +548,8 @@ def build_parser() -> argparse.ArgumentParser:
     pjx.add_argument("project"); pjx.add_argument("--agent", required=True)
     pjx.add_argument("--sub", default=None); pjx.add_argument("--by", default=None)
     pjx.set_defaults(func=cmd_project_assign)
+    pjst = proj.add_parser("state", help="project rollup: epic kanban + each agent's state")
+    pjst.add_argument("project"); pjst.set_defaults(func=cmd_project_state)
 
     sub.add_parser("status", help="my Programs and their leads").set_defaults(func=cmd_status)
     return p

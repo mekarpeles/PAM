@@ -253,6 +253,14 @@ def list_repos(program_id) -> list[dict]:
         conn.close()
 
 
+def get_repo(repo_id) -> Optional[dict]:
+    conn = connect()
+    try:
+        return _row(conn.execute("SELECT * FROM repos WHERE id=?", (repo_id,)).fetchone())
+    finally:
+        conn.close()
+
+
 # ---- roles ------------------------------------------------------------------
 
 def get_role(program_id, key) -> Optional[dict]:
@@ -517,6 +525,23 @@ def list_project_members(project_id) -> list[dict]:
             " FROM project_members pm JOIN agents a ON a.id=pm.agent_id"
             " WHERE pm.project_id=? AND pm.active=1 ORDER BY a.name",
             (project_id,),
+        ).fetchall()]
+    finally:
+        conn.close()
+
+
+def agent_work(agent_id) -> list[dict]:
+    """Active work an agent owns: each project_member joined to its project + repo."""
+    conn = connect()
+    try:
+        return [dict(r) for r in conn.execute(
+            "SELECT pm.sub_ref, p.id AS project_id, p.title, p.forge_ref, p.program_id,"
+            " r.name AS repo_name, r.repo_url"
+            " FROM project_members pm"
+            " JOIN projects p ON p.id=pm.project_id"
+            " LEFT JOIN repos r ON r.id=p.repo_id"
+            " WHERE pm.agent_id=? AND pm.active=1",
+            (agent_id,),
         ).fetchall()]
     finally:
         conn.close()
