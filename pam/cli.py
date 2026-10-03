@@ -8,7 +8,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from . import __version__, config, db, gitutil, program_config
+from . import __version__, bundle, config, db, gitutil, program_config
 
 
 def _die(msg: str, code: int = 1):
@@ -246,6 +246,35 @@ def cmd_program_config(args):
     print(_json.dumps(cfg, indent=2))
 
 
+def cmd_program_publish(args):
+    db.init()
+    try:
+        out = bundle.publish(args.name, out_dir=args.out)
+    except ValueError as e:
+        _die(str(e))
+    print(f"published Program '{args.name}' -> {out}")
+    print(f"  manifest: {out / bundle.MANIFEST}  (authored config only; no recorded state)")
+    print("  commit this as a pam-{program} repo; others install it with: pam program install <dir|git-url>")
+
+
+def cmd_program_install(args):
+    db.init()
+    repo_paths = {}
+    for item in (args.repo_path or []):
+        if "=" not in item:
+            _die(f"--repo-path expects name=path, got: {item}")
+        k, v = item.split("=", 1)
+        repo_paths[k] = v
+    try:
+        prog = bundle.install(args.bundle, name=args.name, repo_paths=repo_paths,
+                              gh_account=args.gh_account, force=args.force)
+    except (ValueError, RuntimeError) as e:
+        _die(str(e))
+    print(f"installed Program '{prog['name']}' [{prog['id']}]")
+    print("  next: staff it with your own agents — pam agent onboard <name> --program "
+          f"{prog['name']} --role program_lead")
+
+
 # ---- membership & team ------------------------------------------------------
 
 def cmd_membership_add(args):
@@ -406,6 +435,17 @@ def build_parser() -> argparse.ArgumentParser:
     pin.add_argument("name"); pin.set_defaults(func=cmd_program_init)
     pcf = prog.add_parser("config", help="show the authored config (read live)")
     pcf.add_argument("name"); pcf.set_defaults(func=cmd_program_config)
+    ppu = prog.add_parser("publish", help="serialize the authored config to a shareable bundle")
+    ppu.add_argument("name"); ppu.add_argument("--out", default=None, help="output dir (default ./pam-<name>)")
+    ppu.set_defaults(func=cmd_program_publish)
+    ppi = prog.add_parser("install", help="install a Program from a bundle dir")
+    ppi.add_argument("bundle", help="path to a bundle dir (containing pam.program.toml)")
+    ppi.add_argument("--name", default=None, help="rename the installed Program")
+    ppi.add_argument("--repo-path", action="append", default=None, dest="repo_path",
+                     metavar="NAME=PATH", help="bind a repo's local checkout path (repeatable)")
+    ppi.add_argument("--gh-account", default=None, dest="gh_account")
+    ppi.add_argument("--force", action="store_true")
+    ppi.set_defaults(func=cmd_program_install)
 
     role = sub.add_parser("role", help="list roles").add_subparsers(dest="sub")
     rl = role.add_parser("ls"); rl.add_argument("--program", default=None)

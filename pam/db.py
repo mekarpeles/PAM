@@ -271,6 +271,28 @@ def get_role(program_id, key) -> Optional[dict]:
         conn.close()
 
 
+def add_role(program_id, key, title=None, description=None,
+             permissions=None, config=None) -> dict:
+    """Create a program-scoped role (program_id='' would be a built-in seed)."""
+    conn = connect()
+    try:
+        if isinstance(permissions, (list, dict)):
+            permissions = json.dumps(permissions)
+        if isinstance(config, (list, dict)):
+            config = json.dumps(config)
+        rid = ulid()
+        conn.execute(
+            "INSERT INTO roles(id,program_id,key,title,description,permissions,config,created_at)"
+            " VALUES(?,?,?,?,?,?,?,?)",
+            (rid, program_id, key, title, description,
+             permissions or "[]", config or "{}", _now()),
+        )
+        conn.commit()
+        return _row(conn.execute("SELECT * FROM roles WHERE id=?", (rid,)).fetchone())
+    finally:
+        conn.close()
+
+
 def list_roles(program_id=None) -> list[dict]:
     conn = connect()
     try:
