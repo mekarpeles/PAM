@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.venv/
+venv/
+
+# PAM local state (never commit recorded state)
+.pam/
+*.db
+*.db-wal
+*.db-shm

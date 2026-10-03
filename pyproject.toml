@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pam"
+version = "0.1.0"
+description = "PAM — a registry of Programs, agents, teams, projects, and their relationships"
+readme = "README.md"
+requires-python = ">=3.11"
+# No runtime deps: `pip install pam` must work on a machine with no tmux and no network.
+# Oracle (external, pinned) is added in a later phase as an optional extra, never a hard dep.
+dependencies = []
+
+[project.scripts]
+pam = "pam.cli:main"
+
+[tool.setuptools]
+packages = ["pam", "pam.forge", "pam.state"]
