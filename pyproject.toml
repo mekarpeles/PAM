@@ -19,4 +19,4 @@ pam = "pam.cli:main"
 include = ["pam*"]
 
 [tool.setuptools.package-data]
-"pam.agents.ada" = ["*.md", "*.yml"]
+"pam.agents.ada" = ["*.md", "*.yml", "docs/*.md", "docs/skills/*.md"]

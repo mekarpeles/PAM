@@ -24,13 +24,21 @@ Program that binds its placeholders, so it ships with PAM rather than as a separ
 - A Program's own Oracle checks (for example how to run that project's app) live in the Program's
   `.pam/`, not here. Generic ADA stays project agnostic.
 
-## Not yet curated (tracked)
+## docs/
 
-The full process, skills, and doctrine from the old ADA working tree are deliberately not dumped in
-here. That material was the "100 pages an agent will not read" failure. Curating it into a short
-process doc, a small set of generic skills, and doctrine compressed to one-line principles (or an
-on-demand knowledge base, not a startup load) is a tracked task, and the project-specific parts move
-to the Program bundle. See the ADA-curation issue on mekarpeles/PAM.
+The lean, generic docs the manual references, curated from ada-framework (not the old monolith):
+- `docs/process.md`: the end-to-end process, plan to handoff.
+- `docs/skills/placeholders.md`: the complete list of placeholders a Program binds.
+- `docs/skills/worktree-setup.md`: one isolated worktree per issue (generic; project-specific setup
+  like submodules, hooks, and a running stack lives in the Program's `.pam/`).
+- `docs/skills/adversarial-review.md`: the blind subagent review before a PR is marked ready.
+
+## Still deferred (tracked)
+
+The 40-plus incident "doctrine" lessons from the old ADA working tree are deliberately not dumped in
+here (that was the "100 pages an agent will not read" failure). Compressing them to one-line principles
+or an on-demand knowledge base, not a startup load, and bringing in the Oracle engine (surface.py) for
+the Oracle integration, are tracked on the ADA-curation issue (#44) on mekarpeles/PAM.
 
 ## Provenance
 
