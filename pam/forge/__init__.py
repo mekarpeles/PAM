@@ -1,6 +1,17 @@
 """Forge adapters — read a Program's issue tracker/forge (GitHub first).
 
-Phase 3 lands here: a GitHub data-gatherer generalized from openlibrary-pam's new_pr_bot.py
-(cheap `gh`/REST signals -> JSON), used to compute project kanban state (labels) and ADA-agent state.
-Kept empty in the foundation phase so the core import stays dependency-free.
+Cheap `gh`/REST signal gathering (PR state, CI, review decision, labels) behind a small tracker
+abstraction keyed off `programs.tracker`. Used to compute project kanban state (labels) and ADA-agent
+state. Dependency-free and tmux-free; the command runner is injectable for testing.
 """
+from __future__ import annotations
+
+from .github import ForgeError, GitHubForge  # noqa: F401
+
+__all__ = ["get_forge", "GitHubForge", "ForgeError"]
+
+
+def get_forge(tracker: str = "github", run=None):
+    if tracker == "github":
+        return GitHubForge(run=run)
+    raise ValueError(f"unsupported tracker: {tracker!r}")
