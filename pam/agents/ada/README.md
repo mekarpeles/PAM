@@ -28,17 +28,26 @@ Project that binds its placeholders, so it ships with PAM rather than as a separ
 
 The lean, generic docs the manual references, curated from ada-framework (not the old monolith):
 - `docs/process.md`: the end-to-end process, plan to handoff.
+- `docs/doctrine.md`: the incident lessons, compressed to one principle per line and grouped by when
+  each one bites. An on-demand reference, never a startup load.
 - `docs/skills/placeholders.md`: the complete list of placeholders a Project binds.
 - `docs/skills/worktree-setup.md`: one isolated worktree per issue (generic; project-specific setup
   like submodules, hooks, and a running stack lives in the Project's `.pam/`).
 - `docs/skills/adversarial-review.md`: the blind subagent review before a PR is marked ready.
 
+## What stays in a Project's `.pam/`, not here
+
+The fuller ADA working trees carried project-specific skills: how to run a particular stack
+(Docker, mypy, the pre-commit hooks), how to drive a particular multiplexer and spawn agents in it,
+how to publish to a particular knowledge base, and how to review a PR through a particular bot. Those
+are not generic ADA and are deliberately left out. A Project binds them in its own `.pam/`. Generic
+ADA stays project agnostic.
+
 ## Still deferred (tracked)
 
-The 40-plus incident "doctrine" lessons from the old ADA working tree are deliberately not dumped in
-here (that was the "100 pages an agent will not read" failure). Compressing them to one-line principles
-or an on-demand knowledge base, not a startup load, and bringing in the Oracle engine (surface.py) for
-the Oracle integration, are tracked on the ADA-curation issue (#44) on mekarpeles/PAM.
+Bringing in the Oracle engine (`surface.py`) for the Oracle integration is tracked on the ADA-curation
+issue (#44) on mekarpeles/PAM. The doctrine compression that issue also calls for is done: see
+`docs/doctrine.md`.
 
 ## Provenance
 

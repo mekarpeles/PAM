@@ -64,6 +64,16 @@ disagree" is not resolution. Post *N findings, N fixed, N rebutted*.
 
 ---
 
+## The doctrine is a reference, not reading
+
+`docs/doctrine.md` is one compressed principle per line, each carrying the incident that produced it,
+grouped by the moment it bites: about to trust a green suite, about to delete something, about to say
+a thing does not exist, about to report or go quiet. **Do not read it at startup.** Reach for the
+matching group the moment you are about to do one of those things. It is the short form of lessons
+other agents paid for; the process above is what you actually read.
+
+---
+
 ## The ledger is the single record
 
 Every gap you name is closed one of four ways, **and all four require evidence**:
