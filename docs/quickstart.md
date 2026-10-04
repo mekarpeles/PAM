@@ -90,6 +90,20 @@ writes to `~/.pam`.
 Onboarding a name that is already live is refused (reusing a name must never merge two agents'
 histories). Free a name first with `pam agent retire <name>`.
 
+## 2b. Spawn an agent
+
+Bring an onboarded agent up through cmux. `pam spawn` seeds the agent's cmux homedir with a bootstrap
+`AGENTS.md` (pointing at its `.pam/agents/<name>/` definition and the repo), then runs `cmux up` from
+that homedir so the agent boots clean and reads its own identity. It is dry-run by default:
+
+```bash
+pam spawn pr-13163-tags --project openlibrary          # dry run: prints the plan, launches nothing
+pam spawn pr-13163-tags --project openlibrary --go     # actually launch via cmux
+```
+At boot there is no worktree: an ADA creates its own as its first act, while a Division Lead just works
+the forge. cmux owns the homedir and the session; the active Project's env (from `pam activate`) is
+applied so the agent acts as the Project identity.
+
 ## 3. Add Epics and staff them
 
 ```bash

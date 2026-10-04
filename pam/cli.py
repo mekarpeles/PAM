@@ -10,7 +10,7 @@ import os
 import sys
 
 from . import (__version__, activate, agent_def, bundle, config, db, gitutil, initializer, kb,
-               project_config)
+               project_config, spawn)
 
 
 def _die(msg: str, code: int = 1):
@@ -380,6 +380,46 @@ def _resolve_pam_dir(args):
     return p, os.path.dirname(p["config_path"])
 
 
+def cmd_spawn(args):
+    db.init()
+    project = args.project or activate.get_active()
+    if not project:
+        _die("no project: pass --project or `pam activate <project>` first")
+    p = db.get_project(project)
+    if not p:
+        _die(f"no such project: {project}")
+    if not db.resolve_agent(args.name):
+        _die(f"no active agent named '{args.name}'; onboard it first (pam agent onboard ...)")
+    mem = next((m for m in db.list_memberships(p["id"]) if m["agent_name"] == args.name), None)
+    if not mem:
+        _die(f"'{args.name}' is not a member of project '{p['name']}'")
+    if not p["config_path"]:
+        _die(f"project '{p['name']}' has no .pam/; run `pam init` first")
+    pam_dir = os.path.dirname(p["config_path"])
+    repos = db.list_repos(p["id"])
+    if not repos:
+        _die(f"project '{p['name']}' has no repo; add one first")
+    repo_path = repos[0]["path"]
+    defn_dir = os.path.join(pam_dir, "agents", args.name)
+
+    home = spawn.seed_home(args.name, type_key=mem["role_key"], project=p["name"],
+                           repo_path=repo_path, pam_dir=pam_dir, defn_dir=defn_dir,
+                           issue=args.issue)
+    pl = spawn.plan(args.name, p["name"])
+    print(f"prepared homedir: {home}")
+    if not args.go:
+        print("DRY RUN (no agent launched). Would run, from the homedir:")
+        print(f"  {pl['command']}")
+        print(f"  env: {' '.join(f'{k}={v}' for k, v in pl['env'].items())}")
+        print(f"  launch for real with: pam spawn {args.name} --project {p['name']} --go")
+        return
+    print(f"launching via cmux: {pl['command']}")
+    res = spawn.launch(args.name, env=pl["env"])
+    if getattr(res, "returncode", 0) not in (0, None):
+        _die(f"cmux up failed (exit {res.returncode})")
+    print(f"launched '{args.name}'; it boots in its homedir and will act for its role")
+
+
 def cmd_kb_set(args):
     p, pam_dir = _resolve_pam_dir(args)
     path, scaffolded = kb.set_location(pam_dir, args.location)
@@ -724,6 +764,13 @@ def build_parser() -> argparse.ArgumentParser:
     kbsh = kbp.add_parser("show", help="show the KB pointer")
     kbsh.add_argument("--project", default=None)
     kbsh.set_defaults(func=cmd_kb_show)
+
+    sp = sub.add_parser("spawn", help="bring an onboarded agent up via cmux (dry-run unless --go)")
+    sp.add_argument("name")
+    sp.add_argument("--project", default=None, help="Project (default: the active one)")
+    sp.add_argument("--issue", default=None, help="issue number to assign (for an ADA)")
+    sp.add_argument("--go", action="store_true", help="actually launch (default is dry-run)")
+    sp.set_defaults(func=cmd_spawn)
     return p
 
 

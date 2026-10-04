@@ -142,10 +142,13 @@ credentials stored); the Store and CLI (Projects, repos, agents, memberships, ro
 origin-verified binding; full relaunch spec); the forge adapter; computed agent and epic state plus the
 ledger renderer; and the Runtime decision core (action manifest loader, dedup/cooldown, dispatch
 interface, dry-run). ADA folded into `pam/agents/ada/`. `pam kb` sets the Project's knowledge base
-pointer (`.pam/kb.toml`, Obsidian-style).
+pointer (`.pam/kb.toml`, Obsidian-style). `pam spawn` seeds an agent's cmux homedir and brings it up
+via cmux (dry-run by default, `--go` to launch); the agent boots in its homedir and self-worktrees if
+its role calls for it.
 
-**Next:** the cmux provisioning seam (`pam spawn`, issue #50); the Runtime poll loop and, gated, live
-dispatch; curating the ADA process and skills into a short set.
+**Next:** a first-class `--setup` seam in cmux (clean follow-up to the `pam spawn` prototype, issue
+#50); the Runtime poll loop and, gated, live dispatch; curating the ADA process and skills into a short
+set.
 
 **Deferred:** Project publish/install and a central Registry, both superseded by config-in-the-repo;
 the cmux integration; the community agent/skill marketplace (`pam registry`).
