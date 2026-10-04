@@ -141,10 +141,11 @@ standards it seeds (`roles.md`, `agents/`); `pam onboard` writing the committed 
 credentials stored); the Store and CLI (Projects, repos, agents, memberships, roles, epics;
 origin-verified binding; full relaunch spec); the forge adapter; computed agent and epic state plus the
 ledger renderer; and the Runtime decision core (action manifest loader, dedup/cooldown, dispatch
-interface, dry-run). ADA folded into `pam/agents/ada/`.
+interface, dry-run). ADA folded into `pam/agents/ada/`. `pam kb` sets the Project's knowledge base
+pointer (`.pam/kb.toml`, Obsidian-style).
 
-**Next:** the cmux provisioning seam (`pam spawn`, issue #50); `pam kb`; the Runtime poll loop and,
-gated, live dispatch; curating the ADA process and skills into a short set.
+**Next:** the cmux provisioning seam (`pam spawn`, issue #50); the Runtime poll loop and, gated, live
+dispatch; curating the ADA process and skills into a short set.
 
 **Deferred:** Project publish/install and a central Registry, both superseded by config-in-the-repo;
 the cmux integration; the community agent/skill marketplace (`pam registry`).

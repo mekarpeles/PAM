@@ -55,6 +55,18 @@ eval "$(pam activate openlibrary --export)"
 While active, forge and git actions run as the Project's identity. `pam status` shows the active
 Project; `pam deactivate` clears it.
 
+## 1c. Knowledge base (optional)
+
+Give the Project a knowledge base. Obsidian-style markdown with `[[wikilinks]]` is the suggested
+format. By default it lives in-repo and is scaffolded for you:
+
+```bash
+pam kb set                                    # in-repo .pam/kb/, scaffolded
+pam kb set https://github.com/acme/kb.git     # or point at an external KB
+pam kb show
+```
+Like the rest of `.pam/`, the KB is committed and reads on its own.
+
 ## 2. Build the team
 
 ```bash

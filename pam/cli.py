@@ -9,7 +9,7 @@ import argparse
 import os
 import sys
 
-from . import (__version__, activate, agent_def, bundle, config, db, gitutil, initializer,
+from . import (__version__, activate, agent_def, bundle, config, db, gitutil, initializer, kb,
                project_config)
 
 
@@ -362,6 +362,43 @@ def cmd_deactivate(args):
           "GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL")
 
 
+def _resolve_pam_dir(args):
+    """Resolve (project, pam_dir) from --project or the cwd's bound repo."""
+    db.init()
+    name = getattr(args, "project", None)
+    if not name:
+        repo = db.get_repo_by_path(os.path.abspath(os.getcwd()))
+        if repo:
+            name = db.get_project(repo["project_id"])["name"]
+    if not name:
+        _die("no project given and none bound to this directory; use --project or run in a repo")
+    p = db.get_project(name)
+    if not p:
+        _die(f"no such project: {name}")
+    if not p["config_path"]:
+        _die(f"project '{name}' has no .pam/; run `pam init` in the repo first")
+    return p, os.path.dirname(p["config_path"])
+
+
+def cmd_kb_set(args):
+    p, pam_dir = _resolve_pam_dir(args)
+    path, scaffolded = kb.set_location(pam_dir, args.location)
+    loc = kb.load(pam_dir).get("kb", {}).get("location")
+    print(f"kb set for '{p['name']}': {loc}")
+    print(f"  pointer: {path} (commit it)")
+    if scaffolded:
+        print("  scaffolded a local Obsidian-style KB; add notes as .md with [[wikilinks]]")
+
+
+def cmd_kb_show(args):
+    p, pam_dir = _resolve_pam_dir(args)
+    cfg = kb.load(pam_dir).get("kb")
+    if not cfg:
+        _die(f"no KB set for '{p['name']}'; run: pam kb set [location]")
+    for k, v in cfg.items():
+        print(f"  {k:10} {v}")
+
+
 def cmd_project_init(args):
     db.init()
     p = db.get_project(args.name)
@@ -678,6 +715,15 @@ def build_parser() -> argparse.ArgumentParser:
     act.set_defaults(func=cmd_activate)
     sub.add_parser("deactivate", help="deactivate the current Project").set_defaults(
         func=cmd_deactivate)
+
+    kbp = sub.add_parser("kb", help="the Project's knowledge base pointer").add_subparsers(dest="sub")
+    kbs = kbp.add_parser("set", help="set the KB location (default in-repo .pam/kb)")
+    kbs.add_argument("location", nargs="?", default=None, help="in-repo path or external path/URL")
+    kbs.add_argument("--project", default=None)
+    kbs.set_defaults(func=cmd_kb_set)
+    kbsh = kbp.add_parser("show", help="show the KB pointer")
+    kbsh.add_argument("--project", default=None)
+    kbsh.set_defaults(func=cmd_kb_show)
     return p
 
 
