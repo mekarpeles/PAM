@@ -81,6 +81,10 @@ def test_init_seeds_standalone_standards(mods, tmp_path):
         assert f"## {key}:" in text
     assert "pam/agents/ada/" in text          # ADA process pointer for standalone readers
     assert (repo / ".pam" / "agents").is_dir()
+    # KB is a default part of .pam (not a separate command), obsidian-style with rules
+    kb_readme = repo / ".pam" / "kb" / "README.md"
+    assert kb_readme.exists()
+    assert "[[wikilinks]]" in kb_readme.read_text()
 
 
 def test_init_does_not_clobber_edited_roles(mods, tmp_path):

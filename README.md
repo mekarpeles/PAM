@@ -141,10 +141,11 @@ standards it seeds (`roles.md`, `agents/`); `pam onboard` writing the committed 
 credentials stored); the Store and CLI (Projects, repos, agents, memberships, roles, epics;
 origin-verified binding; full relaunch spec); the forge adapter; computed agent and epic state plus the
 ledger renderer; and the Runtime decision core (action manifest loader, dedup/cooldown, dispatch
-interface, dry-run). ADA folded into `pam/agents/ada/`. `pam kb` sets the Project's knowledge base
-pointer (`.pam/kb.toml`, Obsidian-style). `pam spawn` seeds an agent's cmux homedir and brings it up
-via cmux (dry-run by default, `--go` to launch); the agent boots in its homedir and self-worktrees if
-its role calls for it.
+interface, dry-run). ADA folded into `pam/agents/ada/`. `pam init` also seeds a default `.pam/kb/`
+(Obsidian-style knowledge base, part of `.pam/` rather than a separate command). `pam onboard` takes
+`--type`/`--orders`/`--can-onboard`. `pam projects` lists Projects and `pam team` prints the reporting
+tree with statuses. `pam spawn` seeds an agent's cmux homedir and brings it up via cmux (dry-run by
+default, `--go` to launch); the agent boots in its homedir and self-worktrees if its role calls for it.
 
 **Next:** a first-class `--setup` seam in cmux (clean follow-up to the `pam spawn` prototype, issue
 #50); the Runtime poll loop and, gated, live dispatch; curating the ADA process and skills into a short

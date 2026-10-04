@@ -1,6 +1,0 @@
-# PAM knowledge base pointer: authored, committed, read live by PAM.
-[kb]
-# Where this Project's KB lives: an in-repo path (default) or an external path/URL.
-location = ".pam/kb"
-# Obsidian-style markdown with [[wikilinks]] is the suggested format.
-style = "obsidian"

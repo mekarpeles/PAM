@@ -40,7 +40,8 @@ name = "{name}"
 uuid = "{uuid}"
 type = "{type_key}"
 reports_to = "{reports_to}"
-"""
+can_onboard = {can_onboard}
+{orders_line}"""
 
 
 def _identity_md(name: str, type_key: str, link: str | None) -> str:
@@ -56,13 +57,23 @@ def _identity_md(name: str, type_key: str, link: str | None) -> str:
 
 
 def scaffold(pam_dir: str | Path, name: str, uuid: str, type_key: str,
-             reports_to: str = "") -> tuple[Path, bool]:
-    """Write <pam_dir>/agents/<name>/{agent.toml,identity.md} if absent. Returns (dir, created?)."""
+             reports_to: str = "", can_onboard: bool = False,
+             orders_src: str | Path | None = None) -> tuple[Path, bool]:
+    """Write <pam_dir>/agents/<name>/{agent.toml,identity.md[,orders.md]} if absent.
+
+    `can_onboard` records whether this agent may onboard others. `orders_src`, if given and
+    readable, is copied in as orders.md (the agent's specific marching orders). Returns
+    (dir, created?)."""
     d = agent_dir(pam_dir, name)
     if d.exists():
         return d, False
     d.mkdir(parents=True, exist_ok=True)
+    orders_line = ""
+    if orders_src and Path(orders_src).exists():
+        (d / "orders.md").write_text(Path(orders_src).read_text())
+        orders_line = 'orders = "orders.md"\n'
     (d / "agent.toml").write_text(_AGENT_TOML.format(
-        name=name, uuid=uuid, type_key=type_key, reports_to=reports_to or ""))
+        name=name, uuid=uuid, type_key=type_key, reports_to=reports_to or "",
+        can_onboard="true" if can_onboard else "false", orders_line=orders_line))
     (d / "identity.md").write_text(_identity_md(name, type_key, type_def_link(type_key)))
     return d, True

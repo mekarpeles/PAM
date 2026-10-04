@@ -59,6 +59,27 @@ def test_type_without_manual_gets_stub_not_link(tmp_path):
     assert "No canonical manual" in body
 
 
+def test_scaffold_records_can_onboard_and_orders(tmp_path):
+    import pam.agent_def as agent_def
+    orders = tmp_path / "orders.md"
+    orders.write_text("# marching orders\nunblock the import pipeline\n")
+    d, _ = agent_def.scaffold(tmp_path / ".pam", name="lenny-lead", uuid="01L",
+                              type_key="division_lead", can_onboard=True, orders_src=str(orders))
+    toml = (d / "agent.toml").read_text()
+    assert "can_onboard = true" in toml
+    assert 'orders = "orders.md"' in toml
+    assert "unblock the import pipeline" in (d / "orders.md").read_text()
+
+
+def test_scaffold_defaults_can_onboard_false_no_orders(tmp_path):
+    import pam.agent_def as agent_def
+    d, _ = agent_def.scaffold(tmp_path / ".pam", name="w", uuid="01W", type_key="ada_agent")
+    toml = (d / "agent.toml").read_text()
+    assert "can_onboard = false" in toml
+    assert "orders" not in toml
+    assert not (d / "orders.md").exists()
+
+
 def test_scaffold_is_idempotent_and_preserves_edits(tmp_path):
     import pam.agent_def as agent_def
     d, _ = agent_def.scaffold(tmp_path / ".pam", name="a", uuid="01A", type_key="agent")
@@ -88,3 +109,17 @@ def test_onboard_writes_definition_and_no_home_dir(mods, tmp_path):
 
     # onboard did NOT create a ~/.pam agent home directory
     assert not (config.agents_dir() / agent["id"]).exists()
+
+
+def test_cli_onboard_type_alias_and_can_onboard(mods, tmp_path):
+    config, db, initializer, agent_def, cli = mods
+    repo = tmp_path / "myrepo"
+    _git_repo(repo)
+    initializer.init_project(str(repo))
+
+    rc = cli.main(["agent", "onboard", "lenny", "--project", "myrepo",
+                   "--type", "division_lead", "--can-onboard=true"])
+    assert rc == 0
+    toml = (repo / ".pam" / "agents" / "lenny" / "agent.toml").read_text()
+    assert 'type = "division_lead"' in toml
+    assert "can_onboard = true" in toml

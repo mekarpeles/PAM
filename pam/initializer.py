@@ -37,9 +37,23 @@ def roles_doc() -> str:
     return "\n".join(lines)
 
 
-def scaffold_standards(pam_dir: str) -> None:
-    """Seed the standalone-valuable standards into `.pam/`: roles.md and an agents/ dir.
+KB_README = """\
+# Knowledge base
 
+This Project's knowledge base. Obsidian-style markdown with `[[wikilinks]]`. It is committed with the
+repo and reads on its own: you do not need to run pam or cmux to use it.
+
+Rules:
+- One note per file, named in kebab-case; link related notes with `[[note-name]]`, and link liberally.
+- Keep each note to one idea; put the specifics in the note, not in this index.
+- This KB is the Project's durable knowledge: decisions, how-tos, gotchas, references.
+"""
+
+
+def scaffold_standards(pam_dir: str) -> None:
+    """Seed the standalone-valuable standards into `.pam/`: roles.md, a knowledge base, agents/.
+
+    The KB is a default part of `.pam/` (not a separate command): obsidian-style, with rules.
     Idempotent and non-clobbering: existing files are left as hand-edited.
     """
     os.makedirs(os.path.join(pam_dir, "agents"), exist_ok=True)
@@ -47,6 +61,12 @@ def scaffold_standards(pam_dir: str) -> None:
     if not os.path.exists(roles_path):
         with open(roles_path, "w") as fh:
             fh.write(roles_doc())
+    kb_dir = os.path.join(pam_dir, "kb")
+    os.makedirs(kb_dir, exist_ok=True)
+    kb_readme = os.path.join(kb_dir, "README.md")
+    if not os.path.exists(kb_readme):
+        with open(kb_readme, "w") as fh:
+            fh.write(KB_README)
 
 
 def init_project(cwd: str, name: str | None = None) -> dict:

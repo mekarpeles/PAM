@@ -9,7 +9,7 @@ import argparse
 import os
 import sys
 
-from . import (__version__, activate, agent_def, bundle, config, db, gitutil, initializer, kb,
+from . import (__version__, activate, agent_def, bundle, config, db, gitutil, initializer,
                project_config, spawn)
 
 
@@ -167,7 +167,8 @@ def cmd_agent_onboard(args):
         pam_dir = os.path.dirname(p["config_path"])
         def_dir, _created = agent_def.scaffold(
             pam_dir, name=args.name, uuid=agent["id"], type_key=role["key"],
-            reports_to=args.reports_to or "")
+            reports_to=args.reports_to or "", can_onboard=args.can_onboard,
+            orders_src=args.orders)
     print(f"onboarded '{agent['name']}' [{agent['id']}] as {role['key']} in '{p['name']}'")
     if reports_to_id:
         print(f"  reports to: {args.reports_to}")
@@ -318,6 +319,58 @@ def cmd_status(args):
         print(f"    members: {len(mems)}   epics: {len(projs)}")
 
 
+def cmd_projects(args):
+    db.init()
+    progs = db.list_projects()
+    if not progs:
+        print("You have no Projects.")
+        return
+    active = activate.get_active()
+    for p in progs:
+        repos = db.list_repos(p["id"])
+        mems = db.list_memberships(p["id"])
+        mark = " *" if p["name"] == active else ""
+        print(f"  {p['name']}{mark}  [{p['tracker']}]  repos={len(repos)}  members={len(mems)}")
+    if active:
+        print("\n  (* = active)")
+
+
+def cmd_team_tree(args):
+    db.init()
+    project = getattr(args, "project", None) or activate.get_active()
+    if not project:
+        repo = db.get_repo_by_path(os.path.abspath(os.getcwd()))
+        if repo:
+            project = db.get_project(repo["project_id"])["name"]
+    if not project:
+        _die("no project: pass --project, `pam activate` one, or run in a repo")
+    p = db.get_project(project)
+    if not p:
+        _die(f"no such project: {project}")
+    mems = db.list_memberships(p["id"])
+    if not mems:
+        print(f"{p['name']}: (no members)")
+        return
+    ids = {m["id"] for m in mems}
+    children = {}
+    for m in mems:
+        children.setdefault(m["reports_to_id"], []).append(m)
+    roots = [m for m in mems if not m["reports_to_id"] or m["reports_to_id"] not in ids]
+
+    def _status(m):
+        a = db.get_agent(m["agent_name"])
+        return "running" if a and a["last_session_id"] else "idle"
+
+    def walk(node, depth):
+        print(f"{'  ' * (depth + 1)}- {node['agent_name']} [{node['role_key']}] ({_status(node)})")
+        for c in sorted(children.get(node["id"], []), key=lambda x: x["agent_name"]):
+            walk(c, depth + 1)
+
+    print(p["name"])
+    for r in sorted(roots, key=lambda x: (x["role_key"] != "project_lead", x["agent_name"])):
+        walk(r, 0)
+
+
 def cmd_activate(args):
     db.init()
     name = args.project
@@ -362,24 +415,6 @@ def cmd_deactivate(args):
           "GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL")
 
 
-def _resolve_pam_dir(args):
-    """Resolve (project, pam_dir) from --project or the cwd's bound repo."""
-    db.init()
-    name = getattr(args, "project", None)
-    if not name:
-        repo = db.get_repo_by_path(os.path.abspath(os.getcwd()))
-        if repo:
-            name = db.get_project(repo["project_id"])["name"]
-    if not name:
-        _die("no project given and none bound to this directory; use --project or run in a repo")
-    p = db.get_project(name)
-    if not p:
-        _die(f"no such project: {name}")
-    if not p["config_path"]:
-        _die(f"project '{name}' has no .pam/; run `pam init` in the repo first")
-    return p, os.path.dirname(p["config_path"])
-
-
 def cmd_spawn(args):
     db.init()
     project = args.project or activate.get_active()
@@ -418,25 +453,6 @@ def cmd_spawn(args):
     if getattr(res, "returncode", 0) not in (0, None):
         _die(f"cmux up failed (exit {res.returncode})")
     print(f"launched '{args.name}'; it boots in its homedir and will act for its role")
-
-
-def cmd_kb_set(args):
-    p, pam_dir = _resolve_pam_dir(args)
-    path, scaffolded = kb.set_location(pam_dir, args.location)
-    loc = kb.load(pam_dir).get("kb", {}).get("location")
-    print(f"kb set for '{p['name']}': {loc}")
-    print(f"  pointer: {path} (commit it)")
-    if scaffolded:
-        print("  scaffolded a local Obsidian-style KB; add notes as .md with [[wikilinks]]")
-
-
-def cmd_kb_show(args):
-    p, pam_dir = _resolve_pam_dir(args)
-    cfg = kb.load(pam_dir).get("kb")
-    if not cfg:
-        _die(f"no KB set for '{p['name']}'; run: pam kb set [location]")
-    for k, v in cfg.items():
-        print(f"  {k:10} {v}")
 
 
 def cmd_project_init(args):
@@ -688,7 +704,12 @@ def build_parser() -> argparse.ArgumentParser:
     ao = agent.add_parser("onboard", help="register an agent (incl. one PAM didn't start)")
     ao.add_argument("name")
     ao.add_argument("--project", required=True)
-    ao.add_argument("--role", required=True)
+    ao.add_argument("--role", "--type", dest="role", required=True,
+                    help="agent type/role (e.g. ada_agent, division_lead, project_lead, agent)")
+    ao.add_argument("--orders", default=None, help="path to a file of the agent's orders (-> orders.md)")
+    ao.add_argument("--can-onboard", dest="can_onboard", nargs="?", const=True, default=False,
+                    type=lambda v: str(v).lower() in ("1", "true", "yes", "y"),
+                    help="whether this agent may onboard others (e.g. --can-onboard=true)")
     ao.add_argument("--session-id", default=None, dest="session_id")
     ao.add_argument("--cwd", default=None)
     ao.add_argument("--identity", default=None)
@@ -720,7 +741,10 @@ def build_parser() -> argparse.ArgumentParser:
     ml = mem.add_parser("ls"); ml.add_argument("--project", required=True)
     ml.set_defaults(func=cmd_membership_ls)
 
-    team = sub.add_parser("team", help="teams within a Project").add_subparsers(dest="sub")
+    team_p = sub.add_parser("team", help="reporting tree of agents and statuses (or manage teams)")
+    team_p.add_argument("--project", default=None, help="Project (default: from cwd or active)")
+    team_p.set_defaults(func=cmd_team_tree)
+    team = team_p.add_subparsers(dest="sub")
     ta = team.add_parser("add"); ta.add_argument("name"); ta.add_argument("--project", required=True)
     ta.set_defaults(func=cmd_team_add)
     tl = team.add_parser("ls"); tl.add_argument("--project", required=True)
@@ -745,6 +769,7 @@ def build_parser() -> argparse.ArgumentParser:
     pjst.add_argument("epic"); pjst.set_defaults(func=cmd_epic_state)
 
     sub.add_parser("status", help="my Projects and their leads").set_defaults(func=cmd_status)
+    sub.add_parser("projects", help="list my Projects").set_defaults(func=cmd_projects)
 
     act = sub.add_parser("activate", help="activate a Project (per-dev identity + env)")
     act.add_argument("project", nargs="?", default=None, help="Project name (default: from cwd)")
@@ -755,15 +780,6 @@ def build_parser() -> argparse.ArgumentParser:
     act.set_defaults(func=cmd_activate)
     sub.add_parser("deactivate", help="deactivate the current Project").set_defaults(
         func=cmd_deactivate)
-
-    kbp = sub.add_parser("kb", help="the Project's knowledge base pointer").add_subparsers(dest="sub")
-    kbs = kbp.add_parser("set", help="set the KB location (default in-repo .pam/kb)")
-    kbs.add_argument("location", nargs="?", default=None, help="in-repo path or external path/URL")
-    kbs.add_argument("--project", default=None)
-    kbs.set_defaults(func=cmd_kb_set)
-    kbsh = kbp.add_parser("show", help="show the KB pointer")
-    kbsh.add_argument("--project", default=None)
-    kbsh.set_defaults(func=cmd_kb_show)
 
     sp = sub.add_parser("spawn", help="bring an onboarded agent up via cmux (dry-run unless --go)")
     sp.add_argument("name")

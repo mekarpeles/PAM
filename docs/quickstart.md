@@ -29,8 +29,9 @@ pam --version
 `pam init` is like `git init`. Run it in a repo. It creates `.pam/` (the shared config), infers the
 issue tracker from the origin remote, and registers the Project in your `~/.pam`. If `.pam/` already
 exists, `pam` just loads it. It also seeds the standalone-readable standards: `.pam/roles.md` (the role
-catalog) and a `.pam/agents/` directory that `pam onboard` fills. Those read on their own, so a
-teammate who never runs pam still gets the standardized roles and the ADA process from the repo.
+catalog), a `.pam/kb/` knowledge base (Obsidian-style, with rules), and a `.pam/agents/` directory that
+`pam onboard` fills. Those read on their own, so a teammate who never runs pam still gets the
+standardized roles, the ADA process, and the KB from the repo.
 
 ```bash
 cd ~/Projects/openlibrary
@@ -55,17 +56,9 @@ eval "$(pam activate openlibrary --export)"
 While active, forge and git actions run as the Project's identity. `pam status` shows the active
 Project; `pam deactivate` clears it.
 
-## 1c. Knowledge base (optional)
-
-Give the Project a knowledge base. Obsidian-style markdown with `[[wikilinks]]` is the suggested
-format. By default it lives in-repo and is scaffolded for you:
-
-```bash
-pam kb set                                    # in-repo .pam/kb/, scaffolded
-pam kb set https://github.com/acme/kb.git     # or point at an external KB
-pam kb show
-```
-Like the rest of `.pam/`, the KB is committed and reads on its own.
+The knowledge base is not a separate step: `pam init` already scaffolded `.pam/kb/` (Obsidian-style,
+with rules). Add notes there as `.md` files linked with `[[wikilinks]]`; it is committed and reads on
+its own.
 
 ## 2. Build the team
 
@@ -73,19 +66,21 @@ Like the rest of `.pam/`, the KB is committed and reads on its own.
 # The Project Lead (meta: tends the Project and its docs):
 pam agent onboard ada --project openlibrary --role project_lead
 
-# A Division Lead, reporting to the Project Lead:
-pam agent onboard imports-lead --project openlibrary --role division_lead --reports-to ada
+# A Division Lead, reporting to the Project Lead, allowed to onboard others, with marching orders:
+pam agent onboard imports-lead --project openlibrary --type division_lead --reports-to ada \
+  --can-onboard=true --orders ./orders/imports.md
 
 # An ADA worker, optionally with its resume coordinates if it already exists:
-pam agent onboard pr-13163-tags --project openlibrary --role ada_agent \
+pam agent onboard pr-13163-tags --project openlibrary --type ada_agent \
   --reports-to imports-lead \
   --session-id <claude-session-uuid> --cwd ~/Projects/openlibrary-13163-tags
 ```
-Each onboard writes a committed definition to `.pam/agents/<name>/`: an `agent.toml` (name, stable
-uuid, type, reporting line) and a vanilla `identity.md` that `@link`s the type's manual shipped with
-the pam package. Commit `.pam/agents/` with your code; it is the shared, standalone-readable team
-definition. The runtime home is provisioned later by cmux at spawn, not by onboard, so onboard never
-writes to `~/.pam`.
+`--type` and `--role` are the same flag; `--reports-to` takes an agent name or uuid. Each onboard
+writes a committed definition to `.pam/agents/<name>/`: an `agent.toml` (name, stable uuid, type,
+reporting line, `can_onboard`) and a vanilla `identity.md` that `@link`s the type's manual shipped with
+the pam package; `--orders <file>` is copied in as `orders.md`. Commit `.pam/agents/` with your code;
+it is the shared, standalone-readable team definition. The runtime home is provisioned later by cmux at
+spawn, not by onboard, so onboard never writes to `~/.pam`.
 
 Onboarding a name that is already live is refused (reusing a name must never merge two agents'
 histories). Free a name first with `pam agent retire <name>`.
@@ -117,6 +112,8 @@ pam epic assign "Tags" --agent pr-13163-tags --sub 13163 --by imports-lead
 ## 4. See it
 
 ```bash
+pam projects                        # list your Projects (active one marked *)
+pam team --project openlibrary      # reporting tree of agents and their statuses
 pam status                          # your Projects, their leads, counts
 pam project show openlibrary        # repos, members, epics
 pam epic ls --project openlibrary
