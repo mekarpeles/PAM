@@ -1,7 +1,7 @@
 # Placeholders a project must bind
 
 **ADA ships with no project in it.** Every repository, account, host and path is a placeholder. This
-file is the complete list — if a document here names something concrete that is not on this list, that
+file is the complete list, if a document here names something concrete that is not on this list, that
 is a leak and a bug.
 
 | Placeholder | What it is | Example binding |
@@ -27,7 +27,7 @@ project in it. A reader sees it and knows it is wrong.
 
 **A prose paraphrase in a command slot** is the dangerous one. Replacing a product name with a
 description produces `git submodule update --init vendor/the application framework` and
-`~/.the multiplexer/{name}/last-session-id` — **commands that read as English and cannot run.** The
+`~/.the multiplexer/{name}/last-session-id`, **commands that read as English and cannot run.** The
 first kind of error announces itself; this kind looks like the document is merely wordy, and an agent
 may spend a cycle on the typo rather than on the missing binding. **Found across 21 files on `main`,
 after a scrub that was reported clean because it was verified by searching for the old names.**
@@ -48,7 +48,7 @@ PROVENANCE:
 ```
 
 Names inside are exempt from the denylist. The markers are comments in Markdown, Python and shell
-alike, and the block must close before the file ends — `tests/test_placeholders.py` checks that the
+alike, and the block must close before the file ends, `tests/test_placeholders.py` checks that the
 markers balance, because an unterminated block silences every check below it.
 
 **Use it for the incident, not for convenience.** A rule survives someone who disagrees with it only
